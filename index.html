@@ -96,7 +96,7 @@
   <div class="bar">
     <div class="title" id="title"><b>Монтажна схема</b><small>няма отворен модел</small></div>
     <button id="btnLetters" class="on" title="Надписите" aria-label="Надписи">Aa</button>
-    <button id="btnFit" title="Целият модел" aria-label="Целият модел">⤢</button>
+    <button id="btnFit" title="Начален изглед" aria-label="Начален изглед">⌂</button>
     <button id="btnFull" title="Цял екран" aria-label="Цял екран" hidden>⛶</button>
     <button id="btnOpen" title="Отвори файл" aria-label="Отвори файл">📂</button>
   </div>
@@ -162,10 +162,13 @@ scene.add(sun);
 // over the top and on, with no stop at the pole. His 2026-10-09: „не ми
 // харесва това че 3дто спира да се върти в изглед отгоре", and after a
 // trackball that turned the house like a ball: „исках просто да махнеш
-// полуса", then „трябва да има някакъв пивот а не да хвърчи къщата": the
-// pivot is the middle of what is shown and stays put — no glide after the
-// finger lets go, two fingers only zoom. One finger turns; the mouse: drag
-// turns, the wheel zooms, right drag (or Shift) moves the pivot.
+// полуса", then „трябва да има някакъв пивот а не да хвърчи къщата": no
+// glide after the finger lets go. And „с двата пръста като слайдвам да е
+// мове … зума да е като в скетчъпа. където зумнеш на там да отива
+// камерата": two fingers pinch and move; a zoom goes towards the point under
+// the fingers (or the mouse) — the panel there stays under them and the
+// pivot comes along. One finger turns; the mouse: drag turns, the wheel
+// zooms where it points, right drag (or Shift) moves.
 class TurnControls {
   constructor(camera, element) {
     this.camera = camera;
@@ -180,7 +183,8 @@ class TurnControls {
     element.addEventListener('pointermove', (e) => this.move(e));
     element.addEventListener('pointerup', (e) => this.up(e));
     element.addEventListener('pointercancel', (e) => this.up(e));
-    element.addEventListener('wheel', (e) => { e.preventDefault(); this.zoom(Math.exp(e.deltaY * 0.001)); }, { passive: false });
+    element.addEventListener('wheel', (e) => { e.preventDefault(); this.zoomAt(Math.exp(e.deltaY * 0.001), e.clientX, e.clientY); }, { passive: false });
+    this.pick = null;   // (x, y) => the model's point under the screen point, or null
     element.addEventListener('contextmenu', (e) => e.preventDefault());
   }
   lookFrom(position) {
@@ -215,7 +219,10 @@ class TurnControls {
       const [a, b] = [...this.pointers.values()];
       const span = Math.hypot(a.x - b.x, a.y - b.y);
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      if (this.pinch && span > 0) this.zoom(this.pinch.span / span);
+      if (this.pinch && span > 0) {
+        this.zoomAt(this.pinch.span / span, mid.x, mid.y);
+        this.pan(mid.x - this.pinch.mid.x, mid.y - this.pinch.mid.y);
+      }
       this.pinch = { span, mid };
     }
   }
@@ -228,6 +235,25 @@ class TurnControls {
   zoom(factor) {
     this.radius = THREE.MathUtils.clamp(this.radius * factor, 0.2, 5000);
   }
+  // Towards the point under (x, y): the model's surface there, or the plane
+  // of the pivot. Camera and pivot close in on it together, so it stays
+  // where it is on the screen.
+  zoomAt(factor, x, y) {
+    const next = THREE.MathUtils.clamp(this.radius * factor, 0.2, 5000);
+    const f = next / this.radius;
+    let point = this.pick ? this.pick(x, y) : null;
+    if (!point) {
+      const rect = this.element.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+      const caster = new THREE.Raycaster();
+      caster.setFromCamera(ndc, this.camera);
+      const facing = this.target.clone().sub(this.camera.position).normalize();
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(facing, this.target);
+      point = caster.ray.intersectPlane(plane, new THREE.Vector3());
+    }
+    if (point) this.target.sub(point).multiplyScalar(f).add(point);
+    this.radius = next;
+  }
   update() {
     const c = Math.cos(this.phi);
     const s = Math.sin(this.phi);
@@ -238,6 +264,15 @@ class TurnControls {
   }
 }
 const controls = new TurnControls(camera, renderer.domElement);
+controls.pick = (x, y) => {
+  if (!model) return null;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+  const caster = new THREE.Raycaster();
+  caster.setFromCamera(ndc, camera);
+  const hit = caster.intersectObjects(blocks.filter((b) => b.object.visible).flatMap((b) => b.bodies), false)[0];
+  return hit ? hit.point : null;
+};
 
 // The stages of the assembly, as the plugin writes them (S1 storey 1 with the
 // stair, F the floor, S2 storey 2, R the roof).
