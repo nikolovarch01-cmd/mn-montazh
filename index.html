@@ -39,11 +39,17 @@
      прозрачни", „още една идея по-прозрачни да са", „увеличи още малко
      прозрачността на бутоните"); the blur through them lighter (his „една
      идея намали и размазването през бутоните"). */
-  button { font: inherit; color: inherit; border: 1px solid var(--line); background: rgba(255, 255, 255, .2);
+  /* A very light 3D look: lighter at the top, a bright rim along the top
+     edge, a faint shade along the bottom; pressed, it sinks (his 2026-10-10:
+     „да направим много лек 3D ефект на копчетата"). */
+  button { font: inherit; color: inherit; border: 1px solid var(--line);
+    background: linear-gradient(to bottom, rgba(255, 255, 255, .34), rgba(255, 255, 255, .1));
     -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
-    border-radius: 14px; padding: 0 14px; min-height: 48px; min-width: 48px; cursor: pointer; box-shadow: var(--shadow);
+    border-radius: 14px; padding: 0 14px; min-height: 48px; min-width: 48px; cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), inset 0 -2px 3px rgba(20, 30, 45, .07), var(--shadow);
     touch-action: manipulation; font-size: 17px; }
-  button:active { transform: translateY(1px); }
+  button:active { transform: translateY(1px);
+    box-shadow: inset 0 2px 4px rgba(20, 30, 45, .12), 0 2px 6px rgba(20, 30, 45, .12); }
   button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
   .top { position: fixed; top: 0; left: 0; right: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 0;
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
@@ -76,13 +82,16 @@
   #grip { width: 16px; align-self: stretch; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   #grip::before { content: ''; width: 4px; height: 34px; border-radius: 2px; background: #9aa6b2; }
   #levelButtons button { padding: 3px 5px; min-width: 46px; min-height: 42px; border: 0; border-radius: 12px;
-    background: rgba(255,255,255,.2); box-shadow: inset 0 0 0 2px #d5dbe1, 0 3px 10px rgba(20,30,45,.14); transition: background .15s, box-shadow .15s, transform .1s; }
+    background: linear-gradient(to bottom, rgba(255,255,255,.34), rgba(255,255,255,.1));
+    box-shadow: inset 0 0 0 2px #d5dbe1, inset 0 3px 0 rgba(255,255,255,.75), inset 0 -3px 4px rgba(20,30,45,.07), 0 3px 10px rgba(20,30,45,.14);
+    transition: background .15s, box-shadow .15s, transform .1s; }
   /* Every house framed like the lit one, in light grey — they read as buttons,
      not as a picture (his 2026-10-10: „направи не селектираните бутончета да
      са оградени в светлосив контур както е селектирания зелен бутон за да
      загатват че са бутони а не просто анимация"). */
   #levelButtons button:active { transform: scale(.95); }
-  #levelButtons button.on { background: rgba(230, 248, 238, .3); box-shadow: inset 0 0 0 2px #7fd790, 0 3px 10px rgba(20,30,45,.14); color: var(--ink); }
+  #levelButtons button.on { background: linear-gradient(to bottom, rgba(230, 248, 238, .45), rgba(230, 248, 238, .15));
+    box-shadow: inset 0 0 0 2px #7fd790, inset 0 3px 0 rgba(255,255,255,.75), inset 0 -3px 4px rgba(20,30,45,.07), 0 3px 10px rgba(20,30,45,.14); color: var(--ink); }
   #levelButtons svg { display: block; margin: 0 auto; filter: drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
   .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
@@ -665,7 +674,7 @@ function show(gltf, label) {
     const data = o.userData || {};
     if (data.name !== undefined && data.colour !== undefined) {
       blocks.push({
-        object: o, name: data.name, placement: data.placement ?? null,
+        object: o, name: data.name, placement: data.placement ?? null, kind: data.kind || 'panel',
         stage: data.stage || 'S1', stageOrder: Number.isFinite(data.stage_order) ? data.stage_order : 1,
         bodies: [], letters: []
       });
@@ -692,7 +701,8 @@ function show(gltf, label) {
     foldLines(block);
   }
   recolour();
-  foldLinesShown = true;   // the new model's lines are all shown
+  foldLinesShown = true;   // the new model's lines are all shown (the next
+                           // drawing hides what 2D does not want)
   blocks.forEach((block, i) => {
     const n = i + 1;
     block.idCode = [(n % 256) / 255, Math.floor(n / 256) / 255];
@@ -1572,7 +1582,11 @@ let foldLinesShown = true;
 function showFoldLines(on) {
   if (on === foldLinesShown) return;
   foldLinesShown = on;
-  for (const b of blocks) if (b.lines) b.lines.visible = on;
+  // The stair (an element, as are the beams) keeps its inner lines — its
+  // treads — in the 2D plan too (his 2026-10-10: „можем ли да пишнем на
+  // стълбата само чертичките в 2D без на другите модули вътрешните
+  // чертички").
+  for (const b of blocks) if (b.lines) b.lines.visible = on || b.kind === 'element';
 }
 
 function draw(shade) {
@@ -1641,7 +1655,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = '193bef2f4648';
+const PAGE_VERSION = '7599c5c50f8c';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
