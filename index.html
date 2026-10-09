@@ -36,8 +36,9 @@
   body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
   /* The buttons' white see-through (his 2026-10-10: „направи бялото на
      бутоните леко прозрачно", then „на прав път сме но бутоните още по
-     прозрачни", „още една идея по-прозрачни да са"). */
-  button { font: inherit; color: inherit; border: 1px solid var(--line); background: rgba(255, 255, 255, .32);
+     прозрачни", „още една идея по-прозрачни да са", „увеличи още малко
+     прозрачността на бутоните"). */
+  button { font: inherit; color: inherit; border: 1px solid var(--line); background: rgba(255, 255, 255, .2);
     -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     border-radius: 14px; padding: 0 14px; min-height: 48px; min-width: 48px; cursor: pointer; box-shadow: var(--shadow);
     touch-action: manipulation; font-size: 17px; }
@@ -74,13 +75,13 @@
   #grip { width: 16px; align-self: stretch; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   #grip::before { content: ''; width: 4px; height: 34px; border-radius: 2px; background: #9aa6b2; }
   #levelButtons button { padding: 3px 5px; min-width: 46px; min-height: 42px; border: 0; border-radius: 12px;
-    background: rgba(255,255,255,.32); box-shadow: inset 0 0 0 2px #d5dbe1, 0 3px 10px rgba(20,30,45,.14); transition: background .15s, box-shadow .15s, transform .1s; }
+    background: rgba(255,255,255,.2); box-shadow: inset 0 0 0 2px #d5dbe1, 0 3px 10px rgba(20,30,45,.14); transition: background .15s, box-shadow .15s, transform .1s; }
   /* Every house framed like the lit one, in light grey — they read as buttons,
      not as a picture (his 2026-10-10: „направи не селектираните бутончета да
      са оградени в светлосив контур както е селектирания зелен бутон за да
      загатват че са бутони а не просто анимация"). */
   #levelButtons button:active { transform: scale(.95); }
-  #levelButtons button.on { background: rgba(230, 248, 238, .42); box-shadow: inset 0 0 0 2px #10b981, 0 3px 10px rgba(20,30,45,.14); color: var(--ink); }
+  #levelButtons button.on { background: rgba(230, 248, 238, .3); box-shadow: inset 0 0 0 2px #10b981, 0 3px 10px rgba(20,30,45,.14); color: var(--ink); }
   #levelButtons svg { display: block; margin: 0 auto; filter: drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
   .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
@@ -124,7 +125,7 @@
      бутон"). */
   #steps .what { display: inline-block; max-width: 100%; box-sizing: border-box; color: var(--muted);
     margin-bottom: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 12px;
-    background: rgba(255, 255, 255, .32); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: rgba(255, 255, 255, .2); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #steps .what b { color: var(--ink); }
   #empty { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
@@ -686,12 +687,6 @@ function show(gltf, label) {
     foldLines(block);
   }
   recolour();
-  blocks.forEach((block, i) => {
-    const n = i + 1;
-    block.idCode = [(n % 256) / 255, Math.floor(n / 256) / 255];
-    block.idMaterial = new THREE.MeshBasicMaterial();
-    for (const m of block.bodies) m.layers.enable(2);
-  });
   scene.add(model);
   const extras = (gltf.scenes && gltf.scenes[0] && gltf.scenes[0].userData) || {};
   // The model's name only on the browser's tab: nothing of it on the screen
@@ -951,6 +946,14 @@ const NEWEST_GLOW = 0x0c5a24;
 // ORIGIN unasked — how pale, the letters and lines going with their panel.
 const PAPER = new THREE.Color(0xeef1f4);
 const paleEdges = new THREE.LineBasicMaterial({ color: 0x1f2a36, transparent: true, opacity: 0.15 });
+// In 2D the lines of what stands are black (his 2026-10-10: „в две дто
+// направи контура на модулите черен"); the pale ones keep their pale lines.
+// Drawn with the see-through things, after every face: a line lying on a
+// face's edge seen straight from above was painted over by that face when
+// drawn before it (his „контурите в 2D-то трябваше да са черни а хич ги няма
+// вече"). (Outer outlines only were tried and taken back — his „върни ги
+// контурите както си бяха".)
+const planEdges = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 1 });
 function pale(block) {
   if (!flat) return false;
   if (block.stage === 'B') return true;
@@ -973,12 +976,7 @@ function look(block) {
     m.material.color.copy(m.userData.base);
     if (faded) m.material.color.lerp(PAPER, 0.8);
   }
-  if (block.lines) {
-    block.lines.material = faded ? paleEdges : edgeMaterial;
-    // In 2D only the outer outlines, drawn by the plan's own step; the lines
-    // of every fold stay for 3D (and for 2D on a phone without the shading).
-    block.lines.visible = !flat || !composer;
-  }
+  if (block.lines) block.lines.material = faded ? paleEdges : (flat ? planEdges : edgeMaterial);
   // What stands (not pale, not the foundation) casts the 2D shadow.
   const casts = flat && !faded && block.stage !== 'B';
   for (const m of block.bodies) { if (casts) m.layers.enable(1); else m.layers.disable(1); }
@@ -1298,10 +1296,6 @@ class PlanShadowPass extends Pass {
     this.mask = new THREE.WebGLRenderTarget(1, 1, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
     this.blurA = target();
     this.blurB = target();
-    // Every block seen from above in a colour of its own — where two colours
-    // meet is a panel's outer outline (his 2026-10-10: „а можеш ли само
-    // външните контури да оставиш в 2D-то").
-    this.ids = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false });
     this.white = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const vertexShader = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
     this.blur = new THREE.ShaderMaterial({
@@ -1319,13 +1313,10 @@ class PlanShadowPass extends Pass {
         }`
     });
     this.mix = new THREE.ShaderMaterial({
-      uniforms: {
-        tDiffuse: { value: null }, tSharp: { value: null }, tSoft: { value: null }, tDepth: { value: null },
-        tIds: { value: null }, texel: { value: new THREE.Vector2() }, depth: { value: SHADOW_DEPTH }
-      },
+      uniforms: { tDiffuse: { value: null }, tSharp: { value: null }, tSoft: { value: null }, tDepth: { value: null }, depth: { value: SHADOW_DEPTH } },
       vertexShader,
       fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tSharp; uniform sampler2D tSoft; uniform sampler2D tDepth;
-        uniform sampler2D tIds; uniform vec2 texel; uniform float depth; varying vec2 vUv;
+        uniform float depth; varying vec2 vUv;
         void main() {
           vec4 colour = texture2D(tDiffuse, vUv);
           float under = 1.0 - smoothstep(0.25, 0.75, texture2D(tSharp, vUv).r);
@@ -1336,24 +1327,6 @@ class PlanShadowPass extends Pass {
           // ъглите сянката в 2D да е по-преливаща").
           float shade = 0.7 * (1.0 - exp(-depth * texture2D(tSoft, vUv).r)) * under * something;
           vec3 rgb = colour.rgb * (1.0 - shade);
-          // The outer outlines: black round what stands, faint round the pale.
-          vec3 here = texture2D(tIds, vUv).rgb;
-          float black = 0.0;
-          float faint = 0.0;
-          // Looked for two dots out each way: a line about twice as thick
-          // as before (his 2026-10-10: „и малко по-дебел контур").
-          for (int k = 1; k <= 2; k++) {
-            for (int i = 0; i < 4; i++) {
-              vec2 off = float(k) * (i == 0 ? vec2(texel.x, 0.0) : (i == 1 ? vec2(-texel.x, 0.0) : (i == 2 ? vec2(0.0, texel.y) : vec2(0.0, -texel.y))));
-              vec3 there = texture2D(tIds, vUv + off).rgb;
-              if (any(greaterThan(abs(here - there), vec3(0.002)))) {
-                black = max(black, max(step(0.9, here.b), step(0.9, there.b)));
-                faint = 1.0;
-              }
-            }
-          }
-          rgb = mix(rgb, rgb * 0.6, faint * (1.0 - black));
-          rgb = mix(rgb, vec3(0.0), black);
           gl_FragColor = vec4(rgb, colour.a);
         }`
     });
@@ -1362,7 +1335,6 @@ class PlanShadowPass extends Pass {
   setSize(width, height) {
     this.size = [Math.max(1, width), Math.max(1, height)];
     this.mask.setSize(this.size[0], this.size[1]);
-    this.ids.setSize(this.size[0], this.size[1]);
   }
   render(renderer, writeBuffer, readBuffer) {
     const cam = this.camera;
@@ -1372,18 +1344,6 @@ class PlanShadowPass extends Pass {
     const clearAlpha = renderer.getClearAlpha();
     scene.background = null;
     renderer.setClearColor(0x000000, 1);
-    // 0. Every block seen, in its own colour; blue full where it stands
-    // (layer 2: the blocks' bodies, no letters, no lines).
-    cam.layers.set(2);
-    for (const b of blocks) {
-      if (!b.idMaterial) continue;
-      b.idMaterial.color.setRGB(b.idCode[0], b.idCode[1], pale(b) ? 0.5 : 1);
-      for (const m of b.bodies) { m.userData.own = m.material; m.material = b.idMaterial; }
-    }
-    renderer.setRenderTarget(this.ids);
-    renderer.clear();
-    renderer.render(scene, cam);
-    for (const b of blocks) for (const m of b.bodies) if (m.userData.own) { m.material = m.userData.own; m.userData.own = null; }
     // 1. What stands, white on black, seen from above (layer 1).
     cam.layers.set(1);
     scene.overrideMaterial = this.white;
@@ -1421,8 +1381,6 @@ class PlanShadowPass extends Pass {
     this.mix.uniforms.tSharp.value = this.mask.texture;
     this.mix.uniforms.tSoft.value = this.blurB.texture;
     this.mix.uniforms.tDepth.value = this.depth;
-    this.mix.uniforms.tIds.value = this.ids.texture;
-    this.mix.uniforms.texel.value.set(1 / this.size[0], 1 / this.size[1]);
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     this.quad.render(renderer);
   }
@@ -1618,7 +1576,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = '661f79a3c960';
+const PAGE_VERSION = '266b57a3ebb4';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
