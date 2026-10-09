@@ -195,6 +195,8 @@ function blockOf(object) {
 }
 
 function show(gltf, label) {
+  if (playing) play();
+  select(null);
   clear();
   model = gltf.scene;
   model.traverse((o) => {
@@ -249,7 +251,9 @@ function show(gltf, label) {
 }
 
 // The order the blocks go up: by placement number; the ones without a number
-// after them, stage by stage, by name.
+// after them, stage by stage, by name. ORIGIN unasked 2026-10-09 — his „като
+// натискаш бутон напред се добавят всеки следващ панел"; the order without
+// numbers and the 1.2 s of the play are the assistant's.
 function restage() {
   const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
   const current = step === null ? null : sequence[step];
@@ -423,7 +427,7 @@ $('btnLetters').onclick = () => setLetters(!lettersOn);
 $('btnPrev').onclick = () => move(-1);
 $('btnNext').onclick = () => move(1);
 $('btnPlay').onclick = play;
-$('btnAll').onclick = () => setStep(null);
+$('btnAll').onclick = () => { if (playing) play(); setStep(null); };
 $('stepRange').oninput = (e) => setStep(Number(e.target.value));
 
 for (const name of ['dragenter', 'dragover']) {
@@ -444,11 +448,12 @@ window.addEventListener('resize', () => {
 
 renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
 
-// ?m=house opens models/house.glb straight from the link.
+// ?m=house opens models/house.glb straight from the link — only a name from
+// this page's own models/, never another site.
 const wanted = new URLSearchParams(location.search).get('m');
-if (wanted) {
+if (wanted && /^[A-Za-z0-9._-]+$/.test(wanted)) {
   $('empty').style.display = 'none';
-  loadUrl(/^https?:/i.test(wanted) || wanted.includes('/') ? wanted : `models/${encodeURIComponent(wanted)}.glb`);
+  loadUrl(`models/${wanted.replace(/\.glb$/i, '')}.glb`);
 }
 </script>
 </body>
