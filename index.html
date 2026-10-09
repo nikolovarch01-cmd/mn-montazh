@@ -1340,12 +1340,16 @@ class PlanShadowPass extends Pass {
           vec3 here = texture2D(tIds, vUv).rgb;
           float black = 0.0;
           float faint = 0.0;
-          for (int i = 0; i < 4; i++) {
-            vec2 off = i == 0 ? vec2(texel.x, 0.0) : (i == 1 ? vec2(-texel.x, 0.0) : (i == 2 ? vec2(0.0, texel.y) : vec2(0.0, -texel.y)));
-            vec3 there = texture2D(tIds, vUv + off).rgb;
-            if (any(greaterThan(abs(here - there), vec3(0.002)))) {
-              black = max(black, max(step(0.9, here.b), step(0.9, there.b)));
-              faint = 1.0;
+          // Looked for two dots out each way: a line about twice as thick
+          // as before (his 2026-10-10: „и малко по-дебел контур").
+          for (int k = 1; k <= 2; k++) {
+            for (int i = 0; i < 4; i++) {
+              vec2 off = float(k) * (i == 0 ? vec2(texel.x, 0.0) : (i == 1 ? vec2(-texel.x, 0.0) : (i == 2 ? vec2(0.0, texel.y) : vec2(0.0, -texel.y))));
+              vec3 there = texture2D(tIds, vUv + off).rgb;
+              if (any(greaterThan(abs(here - there), vec3(0.002)))) {
+                black = max(black, max(step(0.9, here.b), step(0.9, there.b)));
+                faint = 1.0;
+              }
             }
           }
           rgb = mix(rgb, rgb * 0.6, faint * (1.0 - black));
@@ -1614,7 +1618,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = '397c82697655';
+const PAGE_VERSION = '661f79a3c960';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
