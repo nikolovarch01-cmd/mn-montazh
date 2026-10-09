@@ -279,7 +279,7 @@ controls.pick = (x, y) => {
 function stageName(key) {
   const storey = /^S(\d+)$/.exec(key || '');
   if (storey) return `Етаж ${storey[1]}`;
-  return { F: 'Под', R: 'Покрив' }[key] || key || 'Други';
+  return { F: 'Под', R: 'Покрив', B: 'Основа' }[key] || key || 'Други';
 }
 
 let model = null;
@@ -382,7 +382,9 @@ function show(gltf, label) {
 function restage() {
   const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
   const current = step === null ? null : sequence[step];
-  sequence = blocks.filter((b) => on.has(b.stage)).sort((p, q) =>
+  // The foundation stands under everything and is no step (his „да стои като
+  // основа на сградата").
+  sequence = blocks.filter((b) => on.has(b.stage) && b.stage !== 'B').sort((p, q) =>
     (numbered(p) ? 0 : 1) - (numbered(q) ? 0 : 1) ||
     (p.placement ?? 0) - (q.placement ?? 0) ||
     p.stageOrder - q.stageOrder ||
@@ -407,7 +409,7 @@ function setStep(index) {
   const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
   for (const b of blocks) {
     const at = sequence.indexOf(b);
-    b.object.visible = on.has(b.stage) && (index === null || (at >= 0 && at <= index));
+    b.object.visible = on.has(b.stage) && (index === null || b.stage === 'B' || (at >= 0 && at <= index));
     light(b, false);
   }
   if (index !== null && sequence[index]) light(sequence[index], true);
