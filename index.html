@@ -741,21 +741,26 @@ function markLevels() {
   $('grip').addEventListener('click', () => tuck(!drawer.classList.contains('tucked')));
 })();
 
-// The little house of a level button: one band a storey (with its windows),
-// a thin slab a floor, a gable with a chimney the roof, bottom up; green as
-// far as the button shows, the rest grey (his 2026-10-09, then „и ги направи
-// малко по-готини").
+// The little house of a level button — a barnhouse seen from its front: the
+// walls and a steep gable in one outline, no eaves, no chimney; one band a
+// storey with two tall narrow windows, a thin slab a floor, the gable the roof
+// with a slit of glass up into it; bottom up, green as far as the button
+// reaches, the rest grey (his 2026-10-09 „и ги направи малко по-готини", then
+// on 2026-10-10 „да прилича повече на барнхаус погледнат в предната
+// фасада"). ORIGIN unasked — the proportions and the windows.
 let iconCount = 0;
 function houseIcon(list, lit) {
   const id = `h${iconCount += 1}`;
-  const width = 44;
-  const sizes = { storey: 12, slab: 3.5, roof: 13 };
+  const width = 40;
+  const left = 8;
+  const right = width - 8;
+  const sizes = { storey: 12, slab: 2.5, roof: 16 };
   const kinds = list.map((st) => (st.key === 'R' ? 'roof' : (st.key === 'F' ? 'slab' : 'storey')));
   const total = kinds.reduce((sum, kind) => sum + sizes[kind], 0) + 3;
   let y = total - 1.5;
   const defs = `<defs>
     <linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient>
-    <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2dd4a0"/><stop offset="1" stop-color="#047857"/></linearGradient>
+    <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1fb889"/><stop offset="1" stop-color="#065f46"/></linearGradient>
     <linearGradient id="${id}o" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e7eb"/><stop offset="1" stop-color="#c3cad2"/></linearGradient>
   </defs>`;
   const shapes = kinds.map((kind, i) => {
@@ -764,21 +769,22 @@ function houseIcon(list, lit) {
     y = top;
     const on = i <= lit;
     const edge = on ? '#065f46' : '#8a96a3';
+    const glass = on ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.75)';
     if (kind === 'roof') {
       const fill = on ? `url(#${id}r)` : `url(#${id}o)`;
-      return `<rect x="${width * 0.66}" y="${top + 1}" width="4" height="7" rx="0.8" fill="${on ? '#065f46' : '#aab3bc'}"/>` +
-        `<polygon points="2,${top + h} ${width - 2},${top + h} ${width / 2},${top}" fill="${fill}" stroke="${edge}" stroke-width="1" stroke-linejoin="round"/>`;
+      return `<polygon points="${left},${top + h} ${right},${top + h} ${width / 2},${top}" fill="${fill}" stroke="${edge}" stroke-width="1" stroke-linejoin="miter"/>` +
+        `<rect x="${width / 2 - 1.6}" y="${top + h * 0.42}" width="3.2" height="${h * 0.5}" fill="${glass}"/>`;
     }
     if (kind === 'slab') {
-      return `<rect x="4" y="${top}" width="${width - 8}" height="${h}" rx="1" fill="${on ? '#047857' : '#aab3bc'}"/>`;
+      return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${on ? '#065f46' : '#aab3bc'}"/>`;
     }
     const fill = on ? `url(#${id}g)` : `url(#${id}o)`;
-    const glass = on ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.7)';
-    return `<rect x="7" y="${top}" width="${width - 14}" height="${h}" rx="1.6" fill="${fill}" stroke="${edge}" stroke-width="1"/>` +
-      `<rect x="13" y="${top + 3.5}" width="5" height="5" rx="0.8" fill="${glass}"/>` +
-      `<rect x="${width - 18}" y="${top + 3.5}" width="5" height="5" rx="0.8" fill="${glass}"/>`;
+    return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${fill}" stroke="${edge}" stroke-width="1"/>` +
+      `<rect x="${left + 4}" y="${top + 2.5}" width="4" height="${h - 5}" fill="${glass}"/>` +
+      `<rect x="${right - 8}" y="${top + 2.5}" width="4" height="${h - 5}" fill="${glass}"/>`;
   });
-  return `<svg viewBox="0 0 ${width} ${total}" width="${width}" height="${Math.round(total * 1.05)}" aria-hidden="true">${defs}${shapes.join('')}</svg>`;
+  // A quarter bigger than in the drawer: the row over the slider has room.
+  return `<svg viewBox="0 0 ${width} ${total}" width="${Math.round(width * 1.25)}" height="${Math.round(total * 1.3)}" aria-hidden="true">${defs}${shapes.join('')}</svg>`;
 }
 
 // The order the blocks go up: by placement number; the ones without a number
@@ -1323,7 +1329,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = '2e385b1d6aa6';
+const PAGE_VERSION = 'acac2b75d8b7';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
