@@ -552,7 +552,59 @@ function foldLines(block) {
       if (!found || fold) segments.push(o.p, o.q);
     }
   }
-  if (segments.length) root.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segments), edgeMaterial));
+  if (!segments.length) return;
+  block.lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segments), edgeMaterial);
+  root.add(block.lines);
+}
+
+// The panels' colours on the page: all around beige, none glaring, each
+// unlike its neighbours (his 2026-10-09: „да пробваме да направим цветовете
+// на панелите в програмата да са различни но да са всички около бежовото без
+// някакви супер ярки"). Only on the page — SketchUp's scheme keeps its own
+// colours. Neighbours: boxes within 200 mm, as in SketchUp (`colours.rb`); the
+// busiest block first, each takes the tone most unlike its neighbours' (CIE76
+// in Lab), the least used among equals. Dark letters on every one. The
+// foundation keeps its concrete and wood. ORIGIN unasked — the sixteen tones.
+const BEIGES = [0xe8dcc4, 0xd9c7a7, 0xcdb892, 0xbfa77f, 0xe3d3b6, 0xd8c3b0, 0xc9b19c, 0xd6cdb4,
+  0xc4bba0, 0xd2c9a4, 0xbdb592, 0xe6d5bc, 0xcfb79a, 0xb9a386, 0xdccfb8, 0xc8bfae];
+
+function lab(hex) {
+  const c = new THREE.Color(hex);   // linear RGB
+  const x = (0.4124 * c.r + 0.3576 * c.g + 0.1805 * c.b) / 0.95047;
+  const y = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  const z = (0.0193 * c.r + 0.1192 * c.g + 0.9505 * c.b) / 1.08883;
+  const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+}
+
+function recolour() {
+  const tones = BEIGES.map(lab);
+  const unlike = (i, j) => Math.hypot(tones[i][0] - tones[j][0], tones[i][1] - tones[j][1], tones[i][2] - tones[j][2]);
+  const list = blocks.filter((b) => b.stage !== 'B' && b.bodies.length);
+  const boxes = new Map(list.map((b) => [b, new THREE.Box3().setFromObject(b.object)]));
+  const gap = (p, q) => Math.hypot(
+    Math.max(0, p.min.x - q.max.x, q.min.x - p.max.x),
+    Math.max(0, p.min.y - q.max.y, q.min.y - p.max.y),
+    Math.max(0, p.min.z - q.max.z, q.min.z - p.max.z));
+  const around = new Map(list.map((b) => [b, list.filter((o) => o !== b && gap(boxes.get(b), boxes.get(o)) <= 0.2)]));
+  const order = [...list].sort((p, q) => around.get(q).length - around.get(p).length ||
+    p.name.localeCompare(q.name, 'bg', { numeric: true }));
+  const tone = new Map();
+  const used = BEIGES.map(() => 0);
+  for (const b of order) {
+    const taken = around.get(b).filter((o) => tone.has(o)).map((o) => tone.get(o));
+    let best = 0;
+    let bestScore = -1;
+    BEIGES.forEach((_, i) => {
+      const score = taken.length ? Math.min(...taken.map((j) => unlike(i, j))) : Infinity;
+      if (score > bestScore || (score === bestScore && used[i] < used[best])) { best = i; bestScore = score; }
+    });
+    tone.set(b, best);
+    used[best] += 1;
+    for (const m of b.bodies) { m.material.color.setHex(BEIGES[best]); m.userData.base = m.material.color.clone(); }
+    for (const m of b.letters) { m.material.color.setHex(0x1f1f1f); m.userData.base = m.material.color.clone(); }
+    b.colour = new THREE.Color(BEIGES[best]);
+  }
 }
 
 function show(gltf, label) {
@@ -575,6 +627,7 @@ function show(gltf, label) {
       o.material = o.material.clone();   // its own material: lighting one block lights only it
       if (isLetters(o)) {
         block.letters.push(o);
+        o.userData.base = o.material.color.clone();
       } else {
         block.bodies.push(o);
         block.colour = o.material.color.clone();
@@ -583,6 +636,7 @@ function show(gltf, label) {
     });
     foldLines(block);
   }
+  recolour();
   scene.add(model);
   const extras = (gltf.scenes && gltf.scenes[0] && gltf.scenes[0].userData) || {};
   // The model's name only on the browser's tab: nothing of it on the screen
@@ -738,13 +792,37 @@ function restage(count = null) {
 // the rest in their own colour. ORIGIN unasked — the blue.
 const PICKED = new THREE.Color(0x2f7bff);
 const PICKED_GLOW = 0x0b3a99;
+
+// In 2D the stages under the one being put up now go pale: putting up the
+// floor, storey 1 (and the foundation under it) fades; putting up storey 2,
+// the floor too (his 2026-10-09: „в две дто когато минеш от първи етаж на
+// редене на под първия да избледнява, когато минеш от под на втори етаж пода
+// да избледнява"). The stage being put up is the last placed block's (at
+// step 0 the first one's). ORIGIN unasked — how pale, the foundation going
+// with storey 1, the letters and lines going with their panel.
+const PAPER = new THREE.Color(0xeef1f4);
+const paleEdges = new THREE.LineBasicMaterial({ color: 0x1f2a36, transparent: true, opacity: 0.15 });
+function pale(block) {
+  if (!flat || !sequence.length) return false;
+  const now = (shown > 0 ? sequence[shown - 1] : sequence[0]).stageOrder;
+  if (block.stage === 'B') return levels.length > 0 && now > levels[0].order;
+  return block.stageOrder < now;
+}
+
 function look(block) {
   const picked = block === selected;
   const last = step !== null && step >= 0 && sequence[step] === block;
+  const faded = !picked && pale(block);
   for (const m of block.bodies) {
     m.material.color.copy(picked ? PICKED : m.userData.base);
+    if (faded) m.material.color.lerp(PAPER, 0.7);
     m.material.emissive.setHex(picked ? PICKED_GLOW : (last ? 0x553300 : 0x000000));
   }
+  for (const m of block.letters) {
+    m.material.color.copy(m.userData.base);
+    if (faded) m.material.color.lerp(PAPER, 0.8);
+  }
+  if (block.lines) block.lines.material = faded ? paleEdges : edgeMaterial;
 }
 
 // count: how many of the sequence stand (0 … all); the last one put up is lit
@@ -1052,6 +1130,7 @@ function setFlat(on) {
   planControls.pointers.clear();
   view = on ? planCamera : camera;
   aim(view);
+  for (const b of blocks) look(b);
 }
 
 let version = 0;           // anything on the page that changes the picture
