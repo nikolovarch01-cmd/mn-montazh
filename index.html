@@ -743,28 +743,53 @@ function markLevels() {
 
 // The little house of a level button — a barnhouse seen from its gable, after
 // the picture he sent on 2026-10-10 (Norges Hus, „Koia"): a wide house, the
-// roof at about 40°, the walls' and the roof's edge one thick dark frame, the
-// ground a thin line; boards standing at the sides; a slab a floor. The storey
-// under the roof is low — its walls reach only the eaves — and the gable is
-// its own: it goes green with it. The roof is the frame's slopes: on the
-// roof's button only they go green. Every other part grey; no windows. His
-// 2026-10-09 „и ги направи малко по-готини"; 2026-10-10 „да прилича повече на
-// барнхаус погледнат в предната фасада", „не толкова стръмен покрив и
-// по-широка къщата … страничния контур като типичната за барнхаус обобщаваща
-// форма", the picture, „махни прозорчетата и направи да е в зелено само етажа
-// на който отговаря бутончето", „направи флоор по-дебело зелено. Направи
-// страничните линии на фасадата дебели като покривните. Да оформят една
-// рамка", „направи втория етаж по-нисък до точката на корниза но зеленото да
-// включва и триъгълната част … на бутончето за покрива да свети само
-// триъгълната част от дебелата рамка". ORIGIN unasked — every measure and
-// colour of it.
+// roof at about 40°, the walls' and the roof's edge one thick dark-grey frame
+// with rounded corners, the ground a thin line; inside one plain colour, no
+// lines. The storey under the roof is low — its walls reach only the eaves —
+// and the gable is its own: it goes green with it. The roof is the frame's
+// slopes: on the roof's button only they go green. A slab a floor, seen only
+// on its own button. His 2026-10-09 „и ги направи малко по-готини"; 2026-10-10
+// „да прилича повече на барнхаус погледнат в предната фасада", „не толкова
+// стръмен покрив и по-широка къщата … страничния контур като типичната за
+// барнхаус обобщаваща форма", the picture, „махни прозорчетата и направи да е
+// в зелено само етажа на който отговаря бутончето", „направи флоор по-дебело
+// зелено. Направи страничните линии на фасадата дебели като покривните. Да
+// оформят една рамка", „направи втория етаж по-нисък до точката на корниза но
+// зеленото да включва и триъгълната част … на бутончето за покрива да свети
+// само триъгълната част от дебелата рамка", „черната рамка да е по-тъмно сиво
+// не черно и да има леки [заоблености] по ъглите", „къщата отвътре да е един
+// цвят без някакви линии имитиращи детайл", „още малко засили радиусите".
+// ORIGIN unasked — every measure and colour of it.
 let iconCount = 0;
+
+// A path through the points with each inner corner rounded (radius r).
+function roundedPath(points, r, closed = false) {
+  const n = points.length;
+  const at = (i) => points[(i + n) % n];
+  const toward = (p, q, d) => {
+    const len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+    return [p[0] + ((q[0] - p[0]) / len) * d, p[1] + ((q[1] - p[1]) / len) * d];
+  };
+  const cut = (i) => Math.min(r, Math.hypot(at(i)[0] - at(i - 1)[0], at(i)[1] - at(i - 1)[1]) / 2,
+    Math.hypot(at(i + 1)[0] - at(i)[0], at(i + 1)[1] - at(i)[1]) / 2);
+  const parts = [];
+  for (let i = 0; i < n; i += 1) {
+    const corner = closed || (i > 0 && i < n - 1);
+    if (!corner) { parts.push(`${parts.length ? 'L' : 'M'}${at(i)[0]},${at(i)[1]}`); continue; }
+    const a = toward(at(i), at(i - 1), cut(i));
+    const b = toward(at(i), at(i + 1), cut(i));
+    parts.push(`${parts.length ? 'L' : 'M'}${a[0]},${a[1]} Q${at(i)[0]},${at(i)[1]} ${b[0]},${b[1]}`);
+  }
+  return parts.join(' ') + (closed ? ' Z' : '');
+}
+
 function houseIcon(list, lit) {
   const id = `h${iconCount += 1}`;
   const width = 46;
   const left = 5;
   const right = width - 5;
   const mid = width / 2;
+  const radius = 4;
   const kinds = list.map((st) => (st.key === 'R' ? 'roof' : (st.key === 'F' ? 'slab' : 'storey')));
   const roofAt = kinds.indexOf('roof');
   // The storey right under the roof: low, and the gable is its.
@@ -774,41 +799,34 @@ function houseIcon(list, lit) {
   const bottom = total - 1.5;
   let y = bottom;
   let eaves = null;
-  // Dark grey, not black, its corners slightly rounded (his 2026-10-10: „да
-  // стилизираме сега. Черната рамка да е по-тъмно сиво не черно и да има
-  // леки [заоблености] по ъглите").
   const frame = '#4b5563';
   const green = '#10b981';
-  const defs = `<defs>
-    <linearGradient id="${id}g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${total}"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient>
-    <linearGradient id="${id}o" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e7eb"/><stop offset="1" stop-color="#c3cad2"/></linearGradient>
-  </defs>`;
-  const line = (x1, y1, x2, y2, colour, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${colour}" stroke-width="${w}"/>`;
-  const shapes = kinds.map((kind, i) => {
+  const plain = '#d6dbe0';
+  const fills = kinds.map((kind, i) => {
     const h = sizeOf(kind, i);
     const top = y - h;
     y = top;
-    const on = i === lit;
     if (kind === 'roof') {
       eaves = top + h;
-      const gableOn = attic >= 0 && attic === lit;
-      return `<polygon points="${left},${eaves} ${right},${eaves} ${mid},${top}" fill="${gableOn ? `url(#${id}g)` : `url(#${id}o)`}"/>`;
+      return `<polygon points="${left},${eaves} ${right},${eaves} ${mid},${top}" fill="${attic >= 0 && attic === lit ? green : plain}"/>`;
     }
-    if (kind === 'slab') {
-      return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${on ? green : '#aab3bc'}"/>`;
-    }
-    const fill = on ? `url(#${id}g)` : `url(#${id}o)`;
-    const board = on ? 'rgba(6,78,59,.35)' : 'rgba(80,90,100,.25)';
-    const boards = [left + 2.5, left + 5, right - 2.5, right - 5].map((x) => line(x, top + 1, x, top + h - 1, board, 0.5)).join('');
-    return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${fill}"/>` + boards;
+    return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${i === lit ? green : plain}"/>`;
   });
-  const rim = eaves === null
-    ? `M${left},${bottom} V${y} H${right} V${bottom}`
-    : `M${left},${bottom} V${eaves} L${mid},${y} L${right},${eaves} V${bottom}`;
+  const corners = eaves === null
+    ? [[left, bottom], [left, y], [right, y], [right, bottom]]
+    : [[left, bottom], [left, eaves], [mid, y], [right, eaves], [right, bottom]];
+  const outline = roundedPath(corners, radius, true);
+  const rim = roundedPath(corners, radius);
+  const defs = `<defs><clipPath id="${id}c"><path d="${outline}"/></clipPath></defs>`;
+  const shapes = [`<g clip-path="url(#${id}c)">${fills.join('')}</g>`];
   shapes.push(`<path d="M${left},${bottom} H${right}" fill="none" stroke="${frame}" stroke-width="1.4" stroke-linecap="round"/>`);
   shapes.push(`<path d="${rim}" fill="none" stroke="${frame}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
   if (eaves !== null && roofAt === lit) {
-    shapes.push(`<path d="M${left},${eaves} L${mid},${y} L${right},${eaves}" fill="none" stroke="${green}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
+    // The slopes and the ridge, from where the eaves' rounding begins.
+    const slope = Math.hypot(mid - left, eaves - y);
+    const along = (x0, y0) => [x0 + ((mid - x0) / slope) * radius, y0 + ((y - y0) / slope) * radius];
+    const roofLine = roundedPath([along(left, eaves), [mid, y], along(right, eaves)], radius);
+    shapes.push(`<path d="${roofLine}" fill="none" stroke="${green}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
   }
   // A quarter bigger than in the drawer: the row over the slider has room.
   return `<svg viewBox="0 0 ${width} ${total}" width="${Math.round(width * 1.25)}" height="${Math.round(total * 1.25)}" aria-hidden="true">${defs}${shapes.join('')}</svg>`;
@@ -1356,7 +1374,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = '418fc99646a1';
+const PAGE_VERSION = 'cd07121b33df';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
