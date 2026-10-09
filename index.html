@@ -744,10 +744,10 @@ function markLevels() {
 // The little house of a level button — a barnhouse seen from its gable, after
 // the picture he sent on 2026-10-10 (Norges Hus, „Koia"): a wide house, the
 // roof at about 40°, its edge a thick dark band round the gable, the walls'
-// edge thin; glass in the middle of every storey and up into the gable, cut
-// by thin uprights, boards standing at the sides; a thin slab a floor. Bottom
-// up, green as far as the button reaches, the rest grey, the glass lit warm
-// where it is green (his 2026-10-09 „и ги направи малко по-готини", 2026-10-10
+// edge thin; boards standing at the sides; a thin slab a floor. Bottom up,
+// green only the level the button stands for, the rest grey; no windows (his
+// „махни прозорчетата и направи да е в зелено само етажа на който отговаря
+// бутончето") (his 2026-10-09 „и ги направи малко по-готини", 2026-10-10
 // „да прилича повече на барнхаус погледнат в предната фасада", „не толкова
 // стръмен покрив и по-широка къщата … страничния контур като типичната за
 // барнхаус обобщаваща форма", then the picture). ORIGIN unasked — every
@@ -776,32 +776,19 @@ function houseIcon(list, lit) {
     const h = sizes[kind];
     const top = y - h;
     y = top;
-    const on = i <= lit;
-    const glass = on ? '#fff1cc' : 'rgba(255,255,255,.8)';
-    const mullion = on ? '#1f3b33' : '#8a96a3';
+    const on = i === lit;
     if (kind === 'roof') {
       eaves = top + h;
       const fill = on ? `url(#${id}r)` : `url(#${id}o)`;
-      // The gable's glass: a smaller triangle, cut by uprights.
-      const apex = top + 5;
-      const half = (mid - left) - 7;
-      const edgeAt = (x) => apex + (Math.abs(x - mid) / half) * (eaves - apex);
-      const posts = [mid - half / 2, mid, mid + half / 2]
-        .map((x) => line(x, eaves, x, edgeAt(x), mullion, 0.7)).join('');
-      return `<polygon points="${left},${eaves} ${right},${eaves} ${mid},${top}" fill="${fill}"/>` +
-        `<polygon points="${mid - half},${eaves} ${mid + half},${eaves} ${mid},${apex}" fill="${glass}"/>` + posts;
+      return `<polygon points="${left},${eaves} ${right},${eaves} ${mid},${top}" fill="${fill}"/>`;
     }
     if (kind === 'slab') {
       return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${on ? '#065f46' : '#aab3bc'}"/>`;
     }
     const fill = on ? `url(#${id}g)` : `url(#${id}o)`;
-    const gx = left + 8;
-    const gw = right - left - 16;
     const board = on ? 'rgba(6,78,59,.35)' : 'rgba(80,90,100,.25)';
     const boards = [left + 2.5, left + 5, right - 2.5, right - 5].map((x) => line(x, top + 1, x, top + h - 1, board, 0.5)).join('');
-    const posts = [gx + gw / 3, gx + (2 * gw) / 3].map((x) => line(x, top + 1.5, x, top + h - 1, mullion, 0.7)).join('');
-    return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${fill}"/>` + boards +
-      `<rect x="${gx}" y="${top + 1.5}" width="${gw}" height="${h - 2.5}" fill="${glass}"/>` + posts;
+    return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${fill}"/>` + boards;
   });
   // The silhouette: the walls' edge thin, the roof's a thick dark band.
   if (eaves === null) {
@@ -1356,7 +1343,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = '44c42060e3a0';
+const PAGE_VERSION = 'ab41b9d0fe89';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
