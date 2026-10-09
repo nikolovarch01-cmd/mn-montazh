@@ -82,7 +82,7 @@
      са оградени в светлосив контур както е селектирания зелен бутон за да
      загатват че са бутони а не просто анимация"). */
   #levelButtons button:active { transform: scale(.95); }
-  #levelButtons button.on { background: rgba(230, 248, 238, .3); box-shadow: inset 0 0 0 2px #10b981, 0 3px 10px rgba(20,30,45,.14); color: var(--ink); }
+  #levelButtons button.on { background: rgba(230, 248, 238, .3); box-shadow: inset 0 0 0 2px #7fd790, 0 3px 10px rgba(20,30,45,.14); color: var(--ink); }
   #levelButtons svg { display: block; margin: 0 auto; filter: drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
   .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
@@ -106,21 +106,22 @@
   /* The slider green and glowing (his 2026-10-10: „слайдера да е зелен с
      грееш амбиент"), in the newest panel's own light green and its glow
      fading outwards (his „слайдера да е в цвета на зеленото с неговия
-     градиент"): the part done light green, the knob light green with the
+     градиент"), a touch darker (his „една много лека идея по-тъмен
+     слайдер"): the part done light green, the knob light green with the
      panel's bright green halo round it. ORIGIN unasked — the sizes. */
   #steps input[type=range] { display: block; width: 100%; height: 40px; margin: 0; touch-action: manipulation;
     -webkit-appearance: none; appearance: none; background: transparent; --fill: 0%; }
   #steps input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
-    background: linear-gradient(to right, #8fe3a0 var(--fill), #d5dbe1 var(--fill));
+    background: linear-gradient(to right, #7fd790 var(--fill), #d5dbe1 var(--fill));
     box-shadow: 0 0 8px rgba(61, 255, 122, .45); }
   #steps input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px;
-    margin-top: -9px; border-radius: 50%; border: 3px solid #fff; background: radial-gradient(circle at 50% 40%, #b9f2c5, #8fe3a0 70%);
+    margin-top: -9px; border-radius: 50%; border: 3px solid #fff; background: radial-gradient(circle at 50% 40%, #a6e9b3, #7fd790 70%);
     box-shadow: 0 0 14px 5px rgba(61, 255, 122, .55), 0 1px 3px rgba(0, 0, 0, .25); }
   #steps input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: #d5dbe1; }
-  #steps input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: #8fe3a0;
+  #steps input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: #7fd790;
     box-shadow: 0 0 8px rgba(61, 255, 122, .45); }
   #steps input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff;
-    background: radial-gradient(circle at 50% 40%, #b9f2c5, #8fe3a0 70%);
+    background: radial-gradient(circle at 50% 40%, #a6e9b3, #7fd790 70%);
     box-shadow: 0 0 14px 5px rgba(61, 255, 122, .55), 0 1px 3px rgba(0, 0, 0, .25); }
   #steps .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   #steps .row button { font-size: 20px; }
@@ -854,7 +855,9 @@ function houseIcon(list, lit) {
   let y = bottom;
   let eaves = null;
   const frame = '#4b5563';
-  const green = '#10b981';
+  // The slider's green, flat (his 2026-10-10: „зеленото по бутоните в
+  // същия като него цвят. Без градиента разбира се").
+  const green = '#7fd790';
   const plain = '#d6dbe0';
   const fills = kinds.map((kind, i) => {
     const h = sizeOf(kind, i);
@@ -1638,7 +1641,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'b563f73ebb49';
+const PAGE_VERSION = '193bef2f4648';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
