@@ -42,15 +42,13 @@
   .top { position: fixed; top: 0; left: 0; right: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 0;
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .top > * { pointer-events: auto; }
-  .bar { display: flex; gap: 6px; align-items: center; }
-  /* Five buttons up there since 2D: a little narrower, so the model's name
-     keeps its room on a phone. */
-  .bar button { min-width: 44px; padding: 0 10px; }
+  /* Up there only the start view and 2D/3D, on the right (his 2026-10-09: „в
+     горната част на екрана остави само бутона за начална позиция на камерата
+     и за смяна-2д3д"); the rest of the strip lets the fingers through to the
+     model. */
+  .bar { display: flex; gap: 8px; align-items: center; justify-content: flex-end; pointer-events: none; }
+  .bar > * { pointer-events: auto; }
   #btn2d { font-weight: 700; font-size: 16px; }
-  .title { flex: 1; min-width: 0; background: rgba(255,255,255,.9); border-radius: 12px; padding: 6px 12px;
-    box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .title b { display: block; overflow: hidden; text-overflow: ellipsis; }
-  .title small { color: var(--muted); }
   /* The levels, one above the other, storey 1 at the bottom; each a little
      house lit green as far up as it shows (his 2026-10-09). */
   /* A drawer against the left edge, high up, where nothing comes and goes;
@@ -113,12 +111,8 @@
 
 <div class="top">
   <div class="bar">
-    <div class="title" id="title"><b>Монтажна схема</b><small>няма отворен модел</small></div>
-    <button id="btnLetters" class="on" title="Надписите" aria-label="Надписи">Aa</button>
     <button id="btnFit" title="Начален изглед" aria-label="Начален изглед">⌂</button>
     <button id="btn2d" title="2D — етажите отгоре" aria-label="2D изглед отгоре">2D</button>
-    <button id="btnFull" title="Цял екран" aria-label="Цял екран" hidden>⛶</button>
-    <button id="btnOpen" title="Отвори файл" aria-label="Отвори файл">📂</button>
   </div>
 </div>
 
@@ -311,18 +305,24 @@ controls.pick = (x, y) => {
   return hit ? hit.point : null;
 };
 
-// The 2D view: the floors from straight above, flat (no perspective), the way
-// SketchUp's top view lies — its red axis to the right, its green one up the
-// screen. One finger (or the mouse) moves the plan; two fingers pinch and
-// move; the wheel zooms where it points; it never turns. The levels and the
-// steps are the same as in 3D — only the view changes. His 2026-10-09:
-// „направи и бутон 2д който вклучва 2д изгледи на етажите и кое след кое се
-// реди пак със стрелки и слайдер и зум и местене". ORIGIN unasked — the plan
-// from above and its sides, the button's place.
+// The 2D view: the floors from straight above, flat (no perspective). One
+// finger (or the mouse) moves the plan; two fingers pinch and move; the wheel
+// zooms where it points; it never turns. The levels and the steps are the
+// same as in 3D — only the view changes. His 2026-10-09: „направи и бутон 2д
+// който вклучва 2д изгледи на етажите и кое след кое се реди пак със стрелки
+// и слайдер и зум и местене". ORIGIN unasked — the plan from above, the
+// button's place.
+// Turned a quarter from SketchUp's top view, so the veranda faces us (his
+// 2026-10-09: „обърни къщата на 90 градуса в 2д-то … така че верандата на
+// къщата да гледа към нас"): SketchUp's red axis up the screen, its green
+// axis to the left — the house's −x side, the veranda's in his model, at the
+// bottom. One turn for every model.
 class PlanControls {
   constructor(camera, element) {
     this.camera = camera;
     this.element = element;
+    this.right = new THREE.Vector3(0, 0, 1);   // glTF +z = SketchUp −y
+    this.up = new THREE.Vector3(1, 0, 0);      // glTF +x = SketchUp +x
     this.target = new THREE.Vector3();
     this.half = 10;       // half the height of the screen, in metres
     this.height = 100;    // where the camera hangs
@@ -369,11 +369,10 @@ class PlanControls {
       this.pinch = { span, mid };
     }
   }
-  // The plan follows the finger: right is +x, up the screen is -z.
+  // The plan follows the finger.
   pan(dx, dy) {
     const scale = (2 * this.half) / Math.max(this.element.clientHeight, 1);
-    this.target.x -= dx * scale;
-    this.target.z -= dy * scale;
+    this.target.addScaledVector(this.right, -dx * scale).addScaledVector(this.up, dy * scale);
   }
   // The point of the plan under (x, y) stays under it.
   zoomAt(factor, x, y) {
@@ -382,10 +381,10 @@ class PlanControls {
     const rect = this.element.getBoundingClientRect();
     const nx = ((x - rect.left) / rect.width) * 2 - 1;
     const ny = -((y - rect.top) / rect.height) * 2 + 1;
-    const px = this.target.x + nx * this.half * (rect.width / Math.max(rect.height, 1));
-    const pz = this.target.z - ny * this.half;
-    this.target.x = px + (this.target.x - px) * f;
-    this.target.z = pz + (this.target.z - pz) * f;
+    const point = this.target.clone()
+      .addScaledVector(this.right, nx * this.half * (rect.width / Math.max(rect.height, 1)))
+      .addScaledVector(this.up, ny * this.half);
+    this.target.sub(point).multiplyScalar(f).add(point);
     this.half = next;
   }
   update() {
@@ -396,7 +395,7 @@ class PlanControls {
     c.top = this.half;
     c.bottom = -this.half;
     c.position.set(this.target.x, this.height, this.target.z);
-    c.up.set(0, 0, -1);
+    c.up.copy(this.up);
     c.lookAt(this.target.x, this.height - 1, this.target.z);
     c.updateProjectionMatrix();
   }
@@ -452,6 +451,110 @@ function blockOf(object) {
   return null;
 }
 
+// The lines on a block: only where its surface really folds (over 25°), never
+// across a flat face — also where two flat pieces of one face meet without
+// sharing their corners (a T, or a hair apart), lie in different materials,
+// or one of them is turned inside out. His 2026-10-09: „в браузъра ако няма
+// реален ръб а е плоско да не излиза черна линия. За да се подсигурим".
+// Before: three.js EdgesGeometry per material, which draws every edge that
+// finds no twin in its own mesh. ORIGIN unasked — the half millimetre.
+const FOLD = Math.cos(THREE.MathUtils.degToRad(25));
+const NEAR = 0.0005;   // half a millimetre, in metres
+
+// Two faces meeting along p–q are one flat surface: they lie in one plane
+// (whichever way each faces) and on the two sides of the line.
+function flatAcross(p, q, one, other) {
+  if (Math.abs(one.normal.dot(other.normal)) < FOLD) return false;
+  const d = new THREE.Vector3().subVectors(q, p).normalize();
+  const across = (apex) => {
+    const w = new THREE.Vector3().subVectors(apex, p);
+    return w.addScaledVector(d, -w.dot(d));
+  };
+  return across(one.apex).dot(across(other.apex)) < 0;
+}
+
+function foldLines(block) {
+  const root = block.object;
+  root.updateWorldMatrix(true, true);
+  const toRoot = root.matrixWorld.clone().invert();
+  const ids = new Map();
+  const corners = [];
+  const corner = (v) => {
+    const key = `${Math.round(v.x / NEAR)},${Math.round(v.y / NEAR)},${Math.round(v.z / NEAR)}`;
+    let n = ids.get(key);
+    if (n === undefined) { n = corners.length; ids.set(key, n); corners.push(v); }
+    return n;
+  };
+  const edges = new Map();   // "i,j" → { i, j, sides: [{ normal, apex }] }
+  for (const mesh of block.bodies) {
+    const position = mesh.geometry.attributes.position;
+    const index = mesh.geometry.index;
+    const toBlock = new THREE.Matrix4().multiplyMatrices(toRoot, mesh.matrixWorld);
+    const count = index ? index.count : position.count;
+    for (let t = 0; t + 2 < count; t += 3) {
+      const v = [0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(position, index ? index.getX(t + k) : t + k).applyMatrix4(toBlock));
+      const normal = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0]));
+      if (normal.lengthSq() < 1e-14) continue;   // no area
+      normal.normalize();
+      const n = v.map(corner);
+      for (let k = 0; k < 3; k++) {
+        const i = Math.min(n[k], n[(k + 1) % 3]);
+        const j = Math.max(n[k], n[(k + 1) % 3]);
+        if (i === j) continue;
+        const key = `${i},${j}`;
+        if (!edges.has(key)) edges.set(key, { i, j, sides: [] });
+        edges.get(key).sides.push({ normal, apex: v[(k + 2) % 3] });
+      }
+    }
+  }
+  const segments = [];
+  const open = [];
+  for (const e of edges.values()) {
+    const p = corners[e.i];
+    const q = corners[e.j];
+    if (e.sides.length === 1) {
+      open.push({ p, q, side: e.sides[0], dir: new THREE.Vector3().subVectors(q, p).normalize(), length: p.distanceTo(q) });
+    } else if (e.sides.slice(1).some((s) => !flatAcross(p, q, e.sides[0], s))) {
+      segments.push(p, q);
+    }
+  }
+  // An edge with one face only: drawn unless another face's edge lies along
+  // it and that face goes on flat. Edges are sorted by direction first, so
+  // only edges of one direction are compared.
+  const buckets = new Map();
+  for (const o of open) {
+    const d = o.dir.clone();
+    if (d.x < -1e-6 || (Math.abs(d.x) <= 1e-6 && (d.y < -1e-6 || (Math.abs(d.y) <= 1e-6 && d.z < 0)))) d.negate();
+    const key = `${Math.round(d.x * 50)},${Math.round(d.y * 50)},${Math.round(d.z * 50)}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(o);
+  }
+  const along = (o, other) => {
+    const at = (v) => {
+      const w = new THREE.Vector3().subVectors(v, o.p);
+      const t = w.dot(o.dir);
+      return { t, gap: w.addScaledVector(o.dir, -t).length() };
+    };
+    const a = at(other.p);
+    const b = at(other.q);
+    if (a.gap > 2 * NEAR || b.gap > 2 * NEAR) return false;
+    return Math.min(o.length, Math.max(a.t, b.t)) - Math.max(0, Math.min(a.t, b.t)) > 2 * NEAR;
+  };
+  for (const list of buckets.values()) {
+    for (const o of list) {
+      let found = false;
+      let fold = false;
+      for (const other of list) {
+        if (other === o || !along(o, other)) continue;
+        found = true;
+        if (!flatAcross(o.p, o.q, o.side, other.side)) { fold = true; break; }
+      }
+      if (!found || fold) segments.push(o.p, o.q);
+    }
+  }
+  if (segments.length) root.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segments), edgeMaterial));
+}
+
 function show(gltf, label) {
   select(null);
   clear();
@@ -475,17 +578,16 @@ function show(gltf, label) {
       } else {
         block.bodies.push(o);
         block.colour = o.material.color.clone();
-        o.add(new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 25), edgeMaterial));
+        o.userData.base = o.material.color.clone();
       }
     });
+    foldLines(block);
   }
   scene.add(model);
   const extras = (gltf.scenes && gltf.scenes[0] && gltf.scenes[0].userData) || {};
-  const b = document.createElement('b');
-  b.textContent = extras.title || label || 'Монтажна схема';
-  const s = document.createElement('small');
-  s.textContent = `${blocks.length} елемента${extras.exported ? ' · ' + extras.exported : ''}`;
-  $('title').replaceChildren(b, s);
+  // The model's name only on the browser's tab: nothing of it on the screen
+  // (his „в горната част на екрана остави само бутона …").
+  document.title = `${extras.title || label || 'Монтажна схема'} — монтажна схема`;
 
   const keys = new Map();
   for (const x of blocks) if (!keys.has(x.stage)) keys.set(x.stage, x.stageOrder);
@@ -629,8 +731,20 @@ function restage(count = null) {
   setStep(count === null ? sequence.length : count);
 }
 
-function light(block, on) {
-  for (const m of block.bodies) m.material.emissive.setHex(on ? 0x553300 : 0x000000);
+// How a block looks: the chosen one lit in the colour of choosing — one
+// bright blue, the same for every panel, glowing so it stands apart from the
+// panels' own blues (his 2026-10-09: „избран панел да светва в цвят за
+// селектиране"); the last one put up while stepping warmed in its own colour;
+// the rest in their own colour. ORIGIN unasked — the blue.
+const PICKED = new THREE.Color(0x2f7bff);
+const PICKED_GLOW = 0x0b3a99;
+function look(block) {
+  const picked = block === selected;
+  const last = step !== null && step >= 0 && sequence[step] === block;
+  for (const m of block.bodies) {
+    m.material.color.copy(picked ? PICKED : m.userData.base);
+    m.material.emissive.setHex(picked ? PICKED_GLOW : (last ? 0x553300 : 0x000000));
+  }
 }
 
 // count: how many of the sequence stand (0 … all); the last one put up is lit
@@ -642,12 +756,9 @@ function setStep(count) {
   for (const b of blocks) {
     const at = sequence.indexOf(b);
     b.object.visible = b.stage === 'B' || (at >= 0 && at < shown);
-    light(b, false);
   }
-  if (step !== null && step >= 0) light(sequence[step], true);
-  if (selected) {
-    if (selected.object.visible) light(selected, true); else select(null);
-  }
+  if (selected && !selected.object.visible) select(null);
+  for (const b of blocks) look(b);
   $('stepRange').value = shown;
   if (shown === sequence.length && shown > 0) {
     $('stepWhat').textContent = `Видими: ${sequence.length}. „◀" маха, „▶" добавя по един.`;
@@ -691,15 +802,19 @@ function fitPlan(box) {
   const drawer = $('levels');
   const left = (drawer.style.display === 'none' ? 0 : Math.max(drawer.getBoundingClientRect().right, 0)) + 8;
   const right = w - 8;
-  const perPixel = Math.max(size.x / Math.max(right - left, 50), size.z / Math.max(bottom - top, 50), 0.001) * 1.1;
+  const across = Math.abs(size.dot(planControls.right));
+  const upward = Math.abs(size.dot(planControls.up));
+  const perPixel = Math.max(across / Math.max(right - left, 50), upward / Math.max(bottom - top, 50), 0.001) * 1.1;
   planControls.half = (perPixel * h) / 2;
-  planControls.target.set(
-    centre.x - ((left + right) / 2 - w / 2) * perPixel,
-    centre.y,
-    centre.z - ((top + bottom) / 2 - h / 2) * perPixel);
-  planControls.height = box.max.y + 5;
+  planControls.target.copy(centre)
+    .addScaledVector(planControls.right, -((left + right) / 2 - w / 2) * perPixel)
+    .addScaledVector(planControls.up, ((top + bottom) / 2 - h / 2) * perPixel);
+  // The camera hangs over the whole model, whatever levels are on now, so a
+  // level switched on later is not cut off (the review of 2026-10-09).
+  const whole = new THREE.Box3().setFromObject(model);
+  planControls.height = whole.max.y + 5;
   planCamera.near = 0.05;
-  planCamera.far = size.y + 10;
+  planCamera.far = whole.max.y - whole.min.y + 10;
   planControls.update();
 }
 
@@ -708,7 +823,10 @@ function fitTurn(box) {
   const centre = box.getCenter(new THREE.Vector3());
   const radius = Math.max(size.length() / 2, 0.5);
   const distance = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * (camera.aspect < 1 ? 1.25 / camera.aspect : 1.05);
-  const direction = new THREE.Vector3(1, 0.8, 1.2).normalize();
+  // From the house's −x side and the back, so the veranda faces us — the
+  // view of before turned half round (his 2026-10-09: „на 180 3Д-то, така че
+  // верандата на къщата да гледа към нас").
+  const direction = new THREE.Vector3(-1, 0.8, -1.2).normalize();
   camera.near = Math.max(distance / 1000, 0.01);
   camera.far = distance * 20;
   camera.updateProjectionMatrix();
@@ -717,20 +835,21 @@ function fitTurn(box) {
   controls.update();
 }
 
+// The letters show always since the „Aa" button went (his „остави само
+// бутона за начална позиция на камерата и за смяна-2д3д").
 function setLetters(on) {
   changed();
   lettersOn = on;
-  $('btnLetters').classList.toggle('on', on);
   for (const block of blocks) for (const m of block.letters) m.visible = on;
 }
 
 function select(block) {
   changed();
-  if (selected) light(selected, false);
-  if (step !== null && sequence[step]) light(sequence[step], true);
+  const before = selected;
   selected = block;
+  if (before) look(before);
   if (!block) { $('info').style.display = 'none'; placeLevels(); return; }
-  light(block, true);
+  look(block);
   $('info').style.display = 'flex';
   $('infoName').textContent = block.name;
   $('infoStage').textContent = stageName(block.stage);
@@ -794,21 +913,23 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   select(hit ? blockOf(hit.object) : null);
 });
 
-// Full screen where the phone allows it (Android does; an iPhone's Safari does
-// not for a page — there the button stays hidden).
-if (document.documentElement.requestFullscreen) {
-  $('btnFull').hidden = false;
-  $('btnFull').onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
-}
-$('btnOpen').onclick = () => $('file').click();
+// A file from the phone: the big button on the empty page (and a file dropped
+// on it on a computer).
 $('btnOpenBig').onclick = () => $('file').click();
 $('file').onchange = (e) => openFile(e.target.files[0]);
 $('btnFit').onclick = () => fit();
 $('btn2d').onclick = () => setFlat(!flat);
-$('btnLetters').onclick = () => setLetters(!lettersOn);
 $('btnPrev').onclick = () => move(-1);
 $('btnNext').onclick = () => move(1);
 $('stepRange').oninput = (e) => setStep(Number(e.target.value));
+
+// Any button pressed, or the step slider moved, puts the chosen panel's card
+// away and lets the panel go (his 2026-10-09: „когато селектираш панел и се
+// появи инфо за него който и бутон да цъкнеш да скрива информацията").
+document.addEventListener('click', (e) => {
+  if (selected && e.target.closest && e.target.closest('button')) select(null);
+}, true);
+$('stepRange').addEventListener('input', () => { if (selected) select(null); });
 
 for (const name of ['dragenter', 'dragover']) {
   window.addEventListener(name, (e) => { e.preventDefault(); $('empty').classList.add('drag'); });
@@ -863,13 +984,18 @@ if (inApp) {
 // той зареди линиите стават пикселизирани, нее добре … не е тежка геометрията
 // мисля че може да се направи постоянно да е вклучен".
 // The lines went jagged because the shaded picture was drawn without
-// smoothing of edges and at a lower resolution than the plain one; now it is
-// drawn smoothed (4 samples) and at the screen's own resolution.
+// smoothing of edges and at a lower resolution than the plain one; now the
+// picture is drawn smoothed (up to 4 samples) and at the screen's own
+// resolution. The shading itself is worked out at half the resolution — it
+// is soft anyway, and that is most of its cost (his 2026-10-09, after the
+// first always-on version: „управляването с пръсти е една идея по нервно").
 // A phone that cannot keep up — under about 14 pictures a second while the
 // model turns — shades only when the model stands still (a quarter of a
 // second after it stops), for the rest of the visit; one that takes over
-// 400 ms for a single shaded picture is spared the shading altogether.
-// ORIGIN unasked — the guards and their numbers.
+// 400 ms for a single shaded picture is spared the shading altogether. A
+// picture in which new shaders were made is not counted (the review of
+// 2026-10-09). ORIGIN unasked — the guards and their numbers, the half.
+const SHADE_SCALE = 0.5;
 let composer = null;
 let renderPass = null;
 let gtao = null;
@@ -877,15 +1003,21 @@ let occlusion = true;
 let shadeWhileMoving = true;
 try {
   // The shading needs WebGL 2 and pictures in half floats; without them the
-  // picture is drawn plain.
+  // picture is drawn plain. The smoothing takes what the graphics chip gives
+  // for such pictures, up to 4.
   if (!renderer.capabilities.isWebGL2 || !renderer.extensions.has('EXT_color_buffer_float')) throw new Error('no float targets');
-  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+  const gl = renderer.getContext();
+  const counts = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES);
+  const samples = counts && counts.length ? Math.min(4, Math.max(...counts)) : 0;
+  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples });
   composer = new EffectComposer(renderer, target);
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(window.innerWidth, window.innerHeight);
   renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
   gtao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+  const sizeShading = gtao.setSize.bind(gtao);
+  gtao.setSize = (width, height) => sizeShading(Math.max(1, Math.round(width * SHADE_SCALE)), Math.max(1, Math.round(height * SHADE_SCALE)));
   gtao.blendIntensity = 0.9;
   gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12 });
   composer.addPass(gtao);
@@ -895,27 +1027,26 @@ try {
 }
 window.addEventListener('resize', () => { if (composer) composer.setSize(window.innerWidth, window.innerHeight); });
 
-// The shading follows the camera the picture is drawn with; the flat 2D one
-// reads depth in its own way.
+// The shading follows the camera the picture is drawn with. (Its camera kind
+// switch is not touched: in three.js 0.160 the shading reads depth through
+// the camera's own projection, for the flat 2D camera too — the review of
+// 2026-10-09.)
 function aim(cam) {
   if (!composer) return;
   renderPass.camera = cam;
   gtao.camera = cam;
-  const perspective = cam.isPerspectiveCamera ? 1 : 0;
-  for (const material of [gtao.gtaoMaterial, gtao.depthRenderMaterial]) {
-    if (material.defines.PERSPECTIVE_CAMERA !== perspective) {
-      material.defines.PERSPECTIVE_CAMERA = perspective;
-      material.needsUpdate = true;
-    }
-  }
 }
 
-// 2D on and off. Each view keeps where it was; the levels, the step and the
-// chosen panel stay as they are.
+// 2D on and off. Each view keeps where it was; the levels and the step stay
+// as they are. The button names the view it goes to: „2D" in 3D, „3D" in 2D
+// (his 2026-10-09: „като цъкнеш на 2д и вече си в 2д от горе на бутона да
+// пише 3Д").
 function setFlat(on) {
   changed();
   flat = on;
-  $('btn2d').classList.toggle('on', on);
+  $('btn2d').textContent = on ? '3D' : '2D';
+  $('btn2d').title = on ? '3D — обратно към въртенето' : '2D — етажите отгоре';
+  $('btn2d').setAttribute('aria-label', on ? '3D изглед' : '2D изглед отгоре');
   controls.enabled = !on;
   planControls.enabled = on;
   controls.pointers.clear();
@@ -935,16 +1066,22 @@ let paceSum = 0;
 let paceCount = 0;
 function changed() { version += 1; }
 
+// Draws the picture; true when new shaders were made for it (slow once, not
+// a slow phone).
 function draw(shade) {
-  if (!shade) { renderer.render(scene, view); return; }
+  const programs = () => (renderer.info.programs ? renderer.info.programs.length : 0);
+  const before = programs();
+  if (!shade) { renderer.render(scene, view); return programs() !== before; }
   const started = performance.now();
   composer.render();
-  if (performance.now() - started > 400) occlusion = false;
+  const made = programs() !== before;
+  if (!made && performance.now() - started > 400) occlusion = false;
+  return made;
 }
 
 // How fast the shaded pictures follow each other while the model moves.
-function pace(shade, now) {
-  if (!shade) { paceLast = 0; return; }
+function pace(shade, now, made) {
+  if (!shade || made) { paceLast = 0; return; }
   // A gap of a second is a pause (the page was in the background), not a
   // slow picture.
   if (paceLast && now - paceLast < 1000) { paceSum += now - paceLast; paceCount += 1; }
@@ -959,7 +1096,8 @@ renderer.setAnimationLoop((now) => {
   const active = flat ? planControls : controls;
   active.update();
   view.updateMatrixWorld();
-  const moving = active.pointers.size > 0 || !lastCamera.equals(view.matrixWorld) ||
+  // A finger resting on the screen without moving draws nothing new.
+  const moving = !lastCamera.equals(view.matrixWorld) ||
     !lastProjection.equals(view.projectionMatrix) || version !== lastVersion;
   if (moving) {
     lastCamera.copy(view.matrixWorld);
@@ -967,12 +1105,11 @@ renderer.setAnimationLoop((now) => {
     lastVersion = version;
     stillSince = now;
     const shade = !!composer && occlusion && shadeWhileMoving;
-    draw(shade);
-    pace(shade, now);
+    pace(shade, now, draw(shade));
     shaded = shade;
     return;
   }
-  pace(false, now);
+  pace(false, now, false);
   if (shaded || !composer || !occlusion || now - stillSince < 250) return;
   draw(true);
   shaded = true;
