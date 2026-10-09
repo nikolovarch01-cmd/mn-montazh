@@ -822,8 +822,13 @@ function houseIcon(list, lit) {
     : [[left, bottom], [left, eaves], [mid, y], [right, eaves], [right, bottom]];
   const outline = roundedPath(corners, radius, true);
   const rim = roundedPath(corners, radius);
-  const defs = `<defs><clipPath id="${id}c"><path d="${outline}"/></clipPath></defs>`;
-  const shapes = [`<g clip-path="url(#${id}c)">${fills.join('')}</g>`];
+  const defs = `<defs><clipPath id="${id}c"><path d="${outline}"/></clipPath>` +
+    `<filter id="${id}s" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6"/></filter></defs>`;
+  // A soft shadow from the frame into the house, fading towards the middle
+  // (his 2026-10-10: „сложи сега и градиент сянка от външната дебела рамка
+  // към сивата вътрешност на къщата"). ORIGIN unasked — its width and depth.
+  const shade = `<path d="${rim}" fill="none" stroke="#1f2937" stroke-opacity=".38" stroke-width="6" filter="url(#${id}s)"/>`;
+  const shapes = [`<g clip-path="url(#${id}c)">${fills.join('')}${shade}</g>`];
   shapes.push(`<path d="${rim}" fill="none" stroke="${frame}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
   if (eaves !== null && roofAt === lit) {
     // The slopes, the ridge and the eaves' rounded corners, down to where the
@@ -1381,7 +1386,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'b57ce118b7d1';
+const PAGE_VERSION = 'f4137da1cfbb';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
