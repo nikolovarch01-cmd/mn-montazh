@@ -686,6 +686,12 @@ function show(gltf, label) {
     foldLines(block);
   }
   recolour();
+  blocks.forEach((block, i) => {
+    const n = i + 1;
+    block.idCode = [(n % 256) / 255, Math.floor(n / 256) / 255];
+    block.idMaterial = new THREE.MeshBasicMaterial();
+    for (const m of block.bodies) m.layers.enable(2);
+  });
   scene.add(model);
   const extras = (gltf.scenes && gltf.scenes[0] && gltf.scenes[0].userData) || {};
   // The model's name only on the browser's tab: nothing of it on the screen
@@ -945,13 +951,6 @@ const NEWEST_GLOW = 0x0c5a24;
 // ORIGIN unasked — how pale, the letters and lines going with their panel.
 const PAPER = new THREE.Color(0xeef1f4);
 const paleEdges = new THREE.LineBasicMaterial({ color: 0x1f2a36, transparent: true, opacity: 0.15 });
-// In 2D the outline of what stands is black (his 2026-10-10: „в две дто
-// направи контура на модулите черен"); the pale ones keep their pale lines.
-// Drawn with the see-through things, after every face: a line lying on a
-// face's edge seen straight from above was painted over by that face when
-// drawn before it — the black lines were gone (his „контурите в 2D-то
-// трябваше да са черни а хич ги няма вече").
-const planEdges = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 1 });
 function pale(block) {
   if (!flat) return false;
   if (block.stage === 'B') return true;
@@ -974,7 +973,12 @@ function look(block) {
     m.material.color.copy(m.userData.base);
     if (faded) m.material.color.lerp(PAPER, 0.8);
   }
-  if (block.lines) block.lines.material = faded ? paleEdges : (flat ? planEdges : edgeMaterial);
+  if (block.lines) {
+    block.lines.material = faded ? paleEdges : edgeMaterial;
+    // In 2D only the outer outlines, drawn by the plan's own step; the lines
+    // of every fold stay for 3D (and for 2D on a phone without the shading).
+    block.lines.visible = !flat || !composer;
+  }
   // What stands (not pale, not the foundation) casts the 2D shadow.
   const casts = flat && !faded && block.stage !== 'B';
   for (const m of block.bodies) { if (casts) m.layers.enable(1); else m.layers.disable(1); }
@@ -1294,6 +1298,10 @@ class PlanShadowPass extends Pass {
     this.mask = new THREE.WebGLRenderTarget(1, 1, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
     this.blurA = target();
     this.blurB = target();
+    // Every block seen from above in a colour of its own — where two colours
+    // meet is a panel's outer outline (his 2026-10-10: „а можеш ли само
+    // външните контури да оставиш в 2D-то").
+    this.ids = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false });
     this.white = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const vertexShader = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
     this.blur = new THREE.ShaderMaterial({
@@ -1311,15 +1319,34 @@ class PlanShadowPass extends Pass {
         }`
     });
     this.mix = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null }, tSharp: { value: null }, tSoft: { value: null }, tDepth: { value: null }, depth: { value: SHADOW_DEPTH } },
+      uniforms: {
+        tDiffuse: { value: null }, tSharp: { value: null }, tSoft: { value: null }, tDepth: { value: null },
+        tIds: { value: null }, texel: { value: new THREE.Vector2() }, depth: { value: SHADOW_DEPTH }
+      },
       vertexShader,
-      fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tSharp; uniform sampler2D tSoft; uniform sampler2D tDepth; uniform float depth; varying vec2 vUv;
+      fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tSharp; uniform sampler2D tSoft; uniform sampler2D tDepth;
+        uniform sampler2D tIds; uniform vec2 texel; uniform float depth; varying vec2 vUv;
         void main() {
           vec4 colour = texture2D(tDiffuse, vUv);
           float under = 1.0 - smoothstep(0.25, 0.75, texture2D(tSharp, vUv).r);
           float something = texture2D(tDepth, vUv).x < 0.99999 ? 1.0 : 0.0;
           float shade = min(depth * texture2D(tSoft, vUv).r * under * something, 0.7);
-          gl_FragColor = vec4(colour.rgb * (1.0 - shade), colour.a);
+          vec3 rgb = colour.rgb * (1.0 - shade);
+          // The outer outlines: black round what stands, faint round the pale.
+          vec3 here = texture2D(tIds, vUv).rgb;
+          float black = 0.0;
+          float faint = 0.0;
+          for (int i = 0; i < 4; i++) {
+            vec2 off = i == 0 ? vec2(texel.x, 0.0) : (i == 1 ? vec2(-texel.x, 0.0) : (i == 2 ? vec2(0.0, texel.y) : vec2(0.0, -texel.y)));
+            vec3 there = texture2D(tIds, vUv + off).rgb;
+            if (any(greaterThan(abs(here - there), vec3(0.002)))) {
+              black = max(black, max(step(0.9, here.b), step(0.9, there.b)));
+              faint = 1.0;
+            }
+          }
+          rgb = mix(rgb, rgb * 0.6, faint * (1.0 - black));
+          rgb = mix(rgb, vec3(0.0), black);
+          gl_FragColor = vec4(rgb, colour.a);
         }`
     });
     this.quad = new FullScreenQuad(null);
@@ -1327,18 +1354,31 @@ class PlanShadowPass extends Pass {
   setSize(width, height) {
     this.size = [Math.max(1, width), Math.max(1, height)];
     this.mask.setSize(this.size[0], this.size[1]);
+    this.ids.setSize(this.size[0], this.size[1]);
   }
   render(renderer, writeBuffer, readBuffer) {
-    // 1. What stands, white on black, seen from above (layer 1).
     const cam = this.camera;
     const layers = cam.layers.mask;
     const background = scene.background;
     const clear = renderer.getClearColor(new THREE.Color());
     const clearAlpha = renderer.getClearAlpha();
-    cam.layers.set(1);
     scene.background = null;
-    scene.overrideMaterial = this.white;
     renderer.setClearColor(0x000000, 1);
+    // 0. Every block seen, in its own colour; blue full where it stands
+    // (layer 2: the blocks' bodies, no letters, no lines).
+    cam.layers.set(2);
+    for (const b of blocks) {
+      if (!b.idMaterial) continue;
+      b.idMaterial.color.setRGB(b.idCode[0], b.idCode[1], pale(b) ? 0.5 : 1);
+      for (const m of b.bodies) { m.userData.own = m.material; m.material = b.idMaterial; }
+    }
+    renderer.setRenderTarget(this.ids);
+    renderer.clear();
+    renderer.render(scene, cam);
+    for (const b of blocks) for (const m of b.bodies) if (m.userData.own) { m.material = m.userData.own; m.userData.own = null; }
+    // 1. What stands, white on black, seen from above (layer 1).
+    cam.layers.set(1);
+    scene.overrideMaterial = this.white;
     renderer.setRenderTarget(this.mask);
     renderer.clear();
     renderer.render(scene, cam);
@@ -1372,6 +1412,8 @@ class PlanShadowPass extends Pass {
     this.mix.uniforms.tSharp.value = this.mask.texture;
     this.mix.uniforms.tSoft.value = this.blurB.texture;
     this.mix.uniforms.tDepth.value = this.depth;
+    this.mix.uniforms.tIds.value = this.ids.texture;
+    this.mix.uniforms.texel.value.set(1 / this.size[0], 1 / this.size[1]);
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     this.quad.render(renderer);
   }
@@ -1567,7 +1609,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'b9a4e4a356df';
+const PAGE_VERSION = 'd83072a91fab';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
