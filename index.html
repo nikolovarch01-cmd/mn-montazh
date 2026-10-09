@@ -742,7 +742,9 @@ function levelEnd(i) {
 }
 
 function jumpTo(i) {
-  setStep(levelEnd(i));
+  // The last one standing glows after a jump too — a button does not put
+  // the green out.
+  setStep(levelEnd(i), true);
 }
 
 // The drawer stays where it is; nothing at the bottom moves it any more.
@@ -996,8 +998,8 @@ function look(block) {
 }
 
 // count: how many of the sequence stand (0 … all); stepped: the count came
-// from ◀ ▶ or the slider — then the last one put up glows (a level shown
-// whole does not).
+// from ◀ ▶, the slider or a level button — then the last one put up glows
+// (not at the opening).
 let newest = null;
 function setStep(count, stepped = false) {
   changed();
@@ -1211,11 +1213,10 @@ $('stepRange').oninput = (e) => setStep(Number(e.target.value), true);
 document.addEventListener('click', (e) => {
   if (!e.target.closest || !e.target.closest('button')) return;
   if (selected) select(null);
-  // Any button but ◀ ▶ puts the newest panel's green out; ◀ ▶ light it again
-  // on the last one standing (his 2026-10-09: „ако цъкнеш някъде в страни или
-  // друг бутон или избереш панел да изгасва. Ако пак цъкнеш стрелка или
-  // слайдер пак да се появявя зеленкото на последния панел").
-  if (!e.target.closest('#btnPrev, #btnNext')) quench();
+  // A button leaves the newest panel's green as it is; only a choice or a tap
+  // on the empty screen puts it out (his 2026-10-10: „върни последния модул да
+  // не спира да свети при цъкане на бутон а само при селекция на нещо друго
+  // или цъкане в празното пространство"; before, any button but ◀ ▶ did).
 }, true);
 $('stepRange').addEventListener('input', () => { if (selected) select(null); });
 
@@ -1520,7 +1521,7 @@ function halo() {
 }
 
 // The newest panel's green goes out — a tap anywhere on the model or the
-// empty screen, a choice, any other button. ◀ ▶ and the slider light it again.
+// empty screen, a choice. ◀ ▶, the slider and the level buttons light it again.
 function quench() {
   if (!newest) return;
   const was = newest;
@@ -1627,7 +1628,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = '2b08692aca06';
+const PAGE_VERSION = 'b591e85877d9';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
