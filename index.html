@@ -50,11 +50,14 @@
   /* The levels, one above the other, storey 1 at the bottom; each a little
      house lit green as far up as it shows (his 2026-10-09). */
   #levels { position: fixed; left: 16px; bottom: calc(150px + env(safe-area-inset-bottom)); display: none;
-    flex-direction: column-reverse; gap: 8px; z-index: 2; }
-  #levels button { padding: 6px; min-width: 56px; min-height: 56px; border: 2px solid var(--line); }
-  #levels button.on { background: var(--card); color: var(--ink); border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(47,111,214,.3), var(--shadow); }
-  #levels svg { display: block; }
+    flex-direction: column-reverse; gap: 4px; z-index: 2; padding: 6px; border-radius: 22px;
+    background: rgba(255,255,255,.78); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    box-shadow: 0 8px 28px rgba(20,30,45,.18), inset 0 0 0 1px rgba(255,255,255,.6); }
+  #levels button { padding: 6px 8px; min-width: 60px; min-height: 58px; border: 0; border-radius: 16px;
+    background: transparent; box-shadow: none; transition: background .15s, transform .1s; }
+  #levels button:active { transform: scale(.95); }
+  #levels button.on { background: #e6f8ee; box-shadow: inset 0 0 0 2px #10b981; color: var(--ink); }
+  #levels svg { display: block; margin: 0 auto; filter: drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
   .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .bottom > * { pointer-events: auto; }
@@ -380,7 +383,6 @@ function show(gltf, label) {
   $('empty').style.display = 'none';
   setLetters(lettersOn);
   restage();
-  setStep(null);
   fit();
 }
 
@@ -393,85 +395,115 @@ function showUpTo(i) {
   upTo = i;
   for (const st of stages) st.on = st.key === 'B' || levels.indexOf(st) <= i;
   markLevels();
-  step = null;
-  restage();
-  setStep(null);
+  restage(i < 0 ? 0 : null);
+}
+
+// The column stands over the cards at the bottom, however high they are —
+// the name card of a picked block comes and goes (his 2026-10-09: „измести
+// бутоните малко нагоре защото се бият с наименованието на модула").
+function placeLevels() {
+  const cards = document.querySelector('.bottom');
+  $('levels').style.bottom = `${Math.round(cards.getBoundingClientRect().height) + 8}px`;
 }
 
 function markLevels() {
   [...$('levels').children].forEach((button, i) => button.classList.toggle('on', i === upTo));
 }
 
-// The little house of a level button: one band a storey, a thin slab a
-// floor, a gable the roof, bottom up; green as far as the button shows, the
-// rest grey.
+// The little house of a level button: one band a storey (with its windows),
+// a thin slab a floor, a gable with a chimney the roof, bottom up; green as
+// far as the button shows, the rest grey (his 2026-10-09, then „и ги направи
+// малко по-готини").
+let iconCount = 0;
 function houseIcon(list, lit) {
-  const width = 40;
-  const sizes = { storey: 11, slab: 3, roof: 12 };
+  const id = `h${iconCount += 1}`;
+  const width = 44;
+  const sizes = { storey: 12, slab: 3.5, roof: 13 };
   const kinds = list.map((st) => (st.key === 'R' ? 'roof' : (st.key === 'F' ? 'slab' : 'storey')));
-  const total = kinds.reduce((sum, kind) => sum + sizes[kind], 0) + 2;
-  let y = total - 1;
+  const total = kinds.reduce((sum, kind) => sum + sizes[kind], 0) + 3;
+  let y = total - 1.5;
+  const defs = `<defs>
+    <linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient>
+    <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2dd4a0"/><stop offset="1" stop-color="#047857"/></linearGradient>
+    <linearGradient id="${id}o" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e7eb"/><stop offset="1" stop-color="#c3cad2"/></linearGradient>
+  </defs>`;
   const shapes = kinds.map((kind, i) => {
     const h = sizes[kind];
     const top = y - h;
     y = top;
-    const fill = i <= lit ? '#2fbf71' : '#c8cfd6';
-    return kind === 'roof'
-      ? `<polygon points="2,${top + h} ${width - 2},${top + h} ${width / 2},${top}" fill="${fill}" stroke="#1f2a36" stroke-width="1.2" stroke-linejoin="round"/>`
-      : `<rect x="6" y="${top}" width="${width - 12}" height="${h}" fill="${fill}" stroke="#1f2a36" stroke-width="1.2"/>`;
+    const on = i <= lit;
+    const edge = on ? '#065f46' : '#8a96a3';
+    if (kind === 'roof') {
+      const fill = on ? `url(#${id}r)` : `url(#${id}o)`;
+      return `<rect x="${width * 0.66}" y="${top + 1}" width="4" height="7" rx="0.8" fill="${on ? '#065f46' : '#aab3bc'}"/>` +
+        `<polygon points="2,${top + h} ${width - 2},${top + h} ${width / 2},${top}" fill="${fill}" stroke="${edge}" stroke-width="1" stroke-linejoin="round"/>`;
+    }
+    if (kind === 'slab') {
+      return `<rect x="4" y="${top}" width="${width - 8}" height="${h}" rx="1" fill="${on ? '#047857' : '#aab3bc'}"/>`;
+    }
+    const fill = on ? `url(#${id}g)` : `url(#${id}o)`;
+    const glass = on ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.7)';
+    return `<rect x="7" y="${top}" width="${width - 14}" height="${h}" rx="1.6" fill="${fill}" stroke="${edge}" stroke-width="1"/>` +
+      `<rect x="13" y="${top + 3.5}" width="5" height="5" rx="0.8" fill="${glass}"/>` +
+      `<rect x="${width - 18}" y="${top + 3.5}" width="5" height="5" rx="0.8" fill="${glass}"/>`;
   });
-  return `<svg viewBox="0 0 ${width} ${total}" width="${width}" height="${Math.round(total * 1.1)}" aria-hidden="true">${shapes.join('')}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${total}" width="${width}" height="${Math.round(total * 1.05)}" aria-hidden="true">${defs}${shapes.join('')}</svg>`;
 }
 
 // The order the blocks go up: by placement number; the ones without a number
 // after them, stage by stage, by name. ORIGIN unasked 2026-10-09 — his „като
 // натискаш бутон напред се добавят всеки следващ панел"; the order without
 // numbers is the assistant's.
-function restage() {
+//
+// The steps count how many of them stand: 0 … all. With every level hidden
+// the steps stay, at 0, over the first storey's blocks — „▶" puts them up one
+// by one from the bare foundation (his 2026-10-09: „лентата за скрол и
+// стрелките да не се скриват с първия етаж. просто да стоят на 0 когато е
+// скрит").
+let shown = 0;
+
+function restage(count = null) {
   const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
-  const current = step === null ? null : sequence[step];
-  // The foundation stands under everything and is no step (his „да стои като
-  // основа на сградата").
+  if (upTo < 0 && levels.length) on.add(levels[0].key);
   sequence = blocks.filter((b) => on.has(b.stage) && b.stage !== 'B').sort((p, q) =>
     (numbered(p) ? 0 : 1) - (numbered(q) ? 0 : 1) ||
     (p.placement ?? 0) - (q.placement ?? 0) ||
     p.stageOrder - q.stageOrder ||
     p.name.localeCompare(q.name, 'bg', { numeric: true }));
-  $('steps').style.display = sequence.length ? 'block' : 'none';
-  $('stepRange').max = Math.max(sequence.length - 1, 0);
-  let next = null;
-  if (step !== null) {
-    next = current ? sequence.indexOf(current) : -1;
-    if (next < 0) next = Math.min(step, sequence.length - 1);
-    if (next < 0) next = null;
-  }
-  setStep(next);
+  $('steps').style.display = blocks.some((b) => b.stage !== 'B') ? 'block' : 'none';
+  placeLevels();
+  $('stepRange').min = 0;
+  $('stepRange').max = sequence.length;
+  setStep(count === null ? sequence.length : count);
 }
 
 function light(block, on) {
   for (const m of block.bodies) m.material.emissive.setHex(on ? 0x553300 : 0x000000);
 }
 
-function setStep(index) {
-  step = index;
-  const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
+// count: how many of the sequence stand (0 … all); the last one put up is lit
+// while stepping.
+function setStep(count) {
+  shown = Math.min(Math.max(count, 0), sequence.length);
+  step = shown < sequence.length ? shown - 1 : null;
   for (const b of blocks) {
     const at = sequence.indexOf(b);
-    b.object.visible = on.has(b.stage) && (index === null || b.stage === 'B' || (at >= 0 && at <= index));
+    b.object.visible = b.stage === 'B' || (at >= 0 && at < shown);
     light(b, false);
   }
-  if (index !== null && sequence[index]) light(sequence[index], true);
+  if (step !== null && step >= 0) light(sequence[step], true);
   if (selected) {
     if (selected.object.visible) light(selected, true); else select(null);
   }
-  if (!sequence.length) return;
-  $('stepRange').value = index === null ? sequence.length - 1 : index;
-  if (index === null) {
-    $('stepWhat').textContent = `Видими: ${sequence.length}. „▶" добавя по един.`;
+  $('stepRange').value = shown;
+  if (shown === sequence.length && shown > 0) {
+    $('stepWhat').textContent = `Видими: ${sequence.length}. „◀" маха, „▶" добавя по един.`;
+  } else if (shown === 0) {
+    $('stepWhat').textContent = `0 от ${sequence.length}. „▶" добавя по един.`;
   } else {
-    const b = sequence[index];
+    const b = sequence[shown - 1];
     const t = document.createElement('span');
-    t.textContent = `Стъпка ${index + 1} от ${sequence.length}: `;
+    t.textContent = `Стъпка ${shown} от ${sequence.length}: `;
     const n = document.createElement('b');
     n.textContent = `${numbered(b) ? `№ ${b.placement} · ` : ''}${b.name}`;
     $('stepWhat').replaceChildren(t, n);
@@ -479,9 +511,7 @@ function setStep(index) {
 }
 
 function move(delta) {
-  if (!sequence.length) return;
-  const at = step === null ? (delta > 0 ? -1 : sequence.length) : step;
-  setStep(Math.min(Math.max(at + delta, 0), sequence.length - 1));
+  setStep(shown + delta);
 }
 
 function fit() {
@@ -512,13 +542,14 @@ function select(block) {
   if (selected) light(selected, false);
   if (step !== null && sequence[step]) light(sequence[step], true);
   selected = block;
-  if (!block) { $('info').style.display = 'none'; return; }
+  if (!block) { $('info').style.display = 'none'; placeLevels(); return; }
   light(block, true);
   $('info').style.display = 'flex';
   $('infoName').textContent = block.name;
   $('infoStage').textContent = stageName(block.stage);
   $('infoNo').textContent = numbered(block) ? `№ ${block.placement}` : 'без №';
   $('infoSwatch').style.background = block.colour ? `#${block.colour.getHexString()}` : '#ccc';
+  placeLevels();
 }
 
 const loader = new GLTFLoader();
@@ -605,6 +636,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  placeLevels();
 });
 
 // Nothing of the page scrolls or zooms under the finger but the stage chips
