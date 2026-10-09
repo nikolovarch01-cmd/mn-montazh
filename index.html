@@ -224,11 +224,19 @@ class TurnControls {
       const [a, b] = [...this.pointers.values()];
       const span = Math.hypot(a.x - b.x, a.y - b.y);
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const angle = Math.atan2(b.y - a.y, b.x - a.x);
       if (this.pinch && span > 0) {
         this.zoomAt(this.pinch.span / span, mid.x, mid.y);
         this.pan(mid.x - this.pinch.mid.x, mid.y - this.pinch.mid.y);
+        // A twist of the two fingers turns the house round its vertical, the
+        // way the fingers turn (his 2026-10-09: „добави и усукване на два
+        // пръста= въртене … но запази сегашното поведение на въртенето").
+        let turn = angle - this.pinch.angle;
+        if (turn > Math.PI) turn -= 2 * Math.PI;
+        if (turn < -Math.PI) turn += 2 * Math.PI;
+        this.theta += turn * (Math.cos(this.phi) >= 0 ? 1 : -1);
       }
-      this.pinch = { span, mid };
+      this.pinch = { span, mid, angle };
     }
   }
   pan(dx, dy) {
