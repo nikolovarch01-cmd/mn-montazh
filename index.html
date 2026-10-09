@@ -967,7 +967,9 @@ function setStep(count, stepped = false) {
     const name = document.createElement('b');
     name.textContent = b.name;
     const rest = document.createElement('span');
-    rest.textContent = `${numbered(b) ? ` · № ${b.placement}` : ''} · ${shown}/${sequence.length}`;
+    // The number always in the middle — „без №" where the panel has none
+    // (his „не не да има номер … номера е по средата").
+    rest.textContent = ` · ${numbered(b) ? `№ ${b.placement}` : 'без №'} · ${shown}/${sequence.length}`;
     $('stepWhat').replaceChildren(name, rest);
   }
 }
@@ -1257,10 +1259,20 @@ window.addEventListener('resize', () => { if (composer) composer.setSize(window.
 // switch is not touched: in three.js 0.160 the shading reads depth through
 // the camera's own projection, for the flat 2D camera too — the review of
 // 2026-10-09.)
+// In 2D the shading reaches wider and deeper: soft ambient shadows from what
+// stands onto what is under it, pale or not — no sun, no direction (his
+// 2026-10-10: „можем ли в 2D-то да сложим сенки от поставените модули
+// независимо че тези под тях са избледнели … не знам дали от слънце. Искам
+// амбиентни такива меки"). ORIGIN unasked — the numbers.
+const SHADE_3D = { radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1 };
+const SHADE_2D = { radius: 2, distanceExponent: 1, thickness: 4, scale: 2.2 };
 function aim(cam) {
   if (!composer) return;
   renderPass.camera = cam;
   gtao.camera = cam;
+  gtao.updateGtaoMaterial(cam.isPerspectiveCamera ? SHADE_3D : SHADE_2D);
+  // Wider shading is grainier — smoothed over a wider ring in 2D.
+  gtao.updatePdMaterial({ radius: cam.isPerspectiveCamera ? 8 : 16 });
   // A halo reads depth by the camera's kind, fixed when its mask material
   // is made — made again for the other kind.
   for (const pass of [outline, outlinePicked]) {
@@ -1390,7 +1402,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'c8e8457dccbb';
+const PAGE_VERSION = 'c5f31a8c5952';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
