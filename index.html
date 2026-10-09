@@ -17,9 +17,19 @@
     --shadow: 0 6px 24px rgba(20, 30, 45, .16);
   }
   * { box-sizing: border-box; }
+  /* The page never moves under the finger — not in Safari, not inside Viber's
+     own browser (his 2026-10-09: „стои като допълнителен прозорец който се
+     мести нагоре и надолу при опит за завъртане на 3дто"). */
   html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink);
-    font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; overflow: hidden; }
+    font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; overflow: hidden;
+    overscroll-behavior: none; touch-action: none; position: fixed; inset: 0; width: 100%; }
   #stage { position: fixed; inset: 0; touch-action: none; }
+  #stage canvas { display: block; touch-action: none; }
+  #inapp { display: none; position: fixed; left: 16px; right: 16px; top: calc(120px + env(safe-area-inset-top));
+    background: #fff7d6; border: 1px solid #e8c95a; border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow); z-index: 5; }
+  #inapp p { margin: 0 0 8px; }
+  #inapp .row { display: flex; gap: 8px; }
+  #inapp button { flex: 1; box-shadow: none; font-size: 16px; }
   /* Made for the phone first (his 2026-10-09: „страницата трябва да е най вече
      за телефон пригодена"): every control a thumb's size, nothing that needs
      a mouse, no zoom on a double tap, no text picked up by a long press. */
@@ -37,7 +47,7 @@
     box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .title b { display: block; overflow: hidden; text-overflow: ellipsis; }
   .title small { color: var(--muted); }
-  #layers { display: none; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  #layers { display: none; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; touch-action: pan-x; }
   #layers::-webkit-scrollbar { display: none; }
   #layers button { flex: none; min-height: 40px; border-radius: 20px; font-weight: 600; }
   #layers button:not(.on) { color: var(--muted); background: rgba(255,255,255,.75); text-decoration: line-through; }
@@ -119,12 +129,17 @@
   </div>
 </div>
 
+<div id="inapp">
+  <p><b>Отвори в браузъра</b> — тук, вътре в приложението, страницата не се върти добре.</p>
+  <div class="row"><button id="btnBrowser">Отвори в браузъра</button><button id="btnStay">Остани</button></div>
+</div>
+
 <div id="busy"><div class="card"><div id="busyText">Зарежда…</div><div class="meter"><i id="busyBar"></i></div></div></div>
 <input type="file" id="file" accept=".glb,model/gltf-binary">
 
 <script type="module">
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const $ = (id) => document.getElementById(id);
@@ -144,10 +159,14 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(0.6, 1, 0.4);
 scene.add(sun);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.12;
-controls.screenSpacePanning = true;
+// Turned freely, over the top and on — no pole where the turning stops (his
+// 2026-10-09: „не ми харесва това че 3дто спира да се върти в изглед
+// отгоре"). One finger turns, two zoom and move.
+const controls = new TrackballControls(camera, renderer.domElement);
+controls.rotateSpeed = 3.2;
+controls.zoomSpeed = 1.4;
+controls.panSpeed = 0.9;
+controls.dynamicDampingFactor = 0.15;
 
 // The stages of the assembly, as the plugin writes them (S1 storey 1 with the
 // stair, F the floor, S2 storey 2, R the roof).
@@ -331,6 +350,7 @@ function fit() {
   const radius = Math.max(size.length() / 2, 0.5);
   const distance = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * (camera.aspect < 1 ? 1.25 / camera.aspect : 1.05);
   const direction = new THREE.Vector3(1, 0.8, 1.2).normalize();
+  camera.up.set(0, 1, 0);
   camera.position.copy(centre).addScaledVector(direction, distance);
   camera.near = Math.max(distance / 1000, 0.01);
   camera.far = distance * 20;
@@ -444,7 +464,38 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  controls.handleResize();
 });
+
+// Nothing of the page scrolls or zooms under the finger but the stage chips
+// and the step slider.
+document.addEventListener('touchmove', (e) => {
+  if (!(e.target.closest && e.target.closest('#layers, input[type=range]'))) e.preventDefault();
+}, { passive: false });
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+// Opened inside an app (Viber and the like): off to the real browser. On
+// Android the page goes over to Chrome by itself, once; on an iPhone a page
+// cannot leave by itself — the button asks Safari (iOS 17+) to take it.
+const ua = navigator.userAgent;
+const android = /Android/i.test(ua);
+const ios = /iPhone|iPad|iPod/i.test(ua);
+const inApp = /Viber|FBAN|FBAV|Instagram|Line\/|Telegram|WhatsApp|Snapchat|; wv\)/i.test(ua) || (ios && !/Safari\//.test(ua));
+function toBrowser() {
+  if (android) {
+    location.href = `intent://${location.host}${location.pathname}${location.search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(location.href)};end`;
+  } else if (ios) {
+    location.href = `x-safari-${location.href}`;
+  }
+}
+if (inApp) {
+  $('inapp').style.display = 'block';
+  $('btnBrowser').onclick = toBrowser;
+  $('btnStay').onclick = () => { $('inapp').style.display = 'none'; };
+  let tried = false;
+  try { tried = sessionStorage.getItem('mn-to-browser') === '1'; sessionStorage.setItem('mn-to-browser', '1'); } catch (e) { /* no storage */ }
+  if (android && !tried) toBrowser();
+}
 
 renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
 
