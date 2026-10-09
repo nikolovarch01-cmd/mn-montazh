@@ -42,11 +42,13 @@
   .top { position: fixed; top: 0; left: 0; right: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 0;
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .top > * { pointer-events: auto; }
-  /* Up there only the start view and 2D/3D, on the right (his 2026-10-09: „в
-     горната част на екрана остави само бутона за начална позиция на камерата
-     и за смяна-2д3д"); the rest of the strip lets the fingers through to the
+  /* Up there only 2D/3D, the start view and the chosen panel's card, in
+     that order from the left (his 2026-10-09: „в горната част на екрана
+     остави само бутона за начална позиция на камерата и за смяна-2д3д", then
+     „2д 3Д бутона най в ляво другия след него и информацията на останалото
+     пространство"); the rest of the strip lets the fingers through to the
      model. */
-  .bar { display: flex; gap: 8px; align-items: center; justify-content: flex-end; pointer-events: none; }
+  .bar { display: flex; gap: 8px; align-items: center; justify-content: flex-start; pointer-events: none; }
   .bar > * { pointer-events: auto; }
   #btn2d { font-weight: 700; font-size: 16px; }
   /* The levels, one above the other, storey 1 at the bottom; each a little
@@ -73,8 +75,8 @@
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .bottom > * { pointer-events: auto; }
   .card { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 14px; }
-  /* The chosen panel's card: up, left of the two buttons, where the removed
-     ones stood, as high as they are (his 2026-10-09: „направи информацията
+  /* The chosen panel's card: up, after the two buttons, in the rest of the
+     strip, as high as they are (his 2026-10-09: „направи информацията
      за селектирания панел да излиза горе на мястото където бяха бутоните
      които махнахме и я направи малко по компактна"). */
   #info { display: none; flex: 1; min-width: 0; align-self: stretch; align-items: center; gap: 8px; padding: 4px 10px; }
@@ -115,13 +117,13 @@
 
 <div class="top">
   <div class="bar">
+    <button id="btn2d" title="2D — етажите отгоре" aria-label="2D изглед отгоре">2D</button>
+    <button id="btnFit" title="Начален изглед" aria-label="Начален изглед">⌂</button>
     <div class="card" id="info">
       <span class="swatch" id="infoSwatch"></span>
       <span class="name"><b id="infoName"></b><small id="infoStage"></small></span>
       <span class="no" id="infoNo"></span>
     </div>
-    <button id="btnFit" title="Начален изглед" aria-label="Начален изглед">⌂</button>
-    <button id="btn2d" title="2D — етажите отгоре" aria-label="2D изглед отгоре">2D</button>
   </div>
 </div>
 
