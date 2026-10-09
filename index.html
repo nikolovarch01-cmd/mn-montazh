@@ -163,6 +163,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -425,7 +426,6 @@ let stages = [];          // [{ key, order, on }]
 let levels = [];          // the stages with a button, bottom up (the foundation has none)
 let upTo = 0;             // the highest level shown
 let sequence = [];        // the blocks of the stages that are on, in the order they go up
-let step = null;          // index in sequence, or null = everything
 let lettersOn = true;
 let selected = null;
 
@@ -784,6 +784,15 @@ function restage(count = null) {
     (p.placement ?? 0) - (q.placement ?? 0) ||
     p.stageOrder - q.stageOrder ||
     p.name.localeCompare(q.name, 'bg', { numeric: true }));
+  // Each block's phase: the highest stage put up by the time it goes up. A
+  // panel of storey 1 numbered after the floor (the veranda's walls, EW1 09
+  // and 10 in his model) goes up in the phase of the floor, so the stages
+  // under it do not light up again in 2D (his 2026-10-09: „като нареждаш еу
+  // 1 9 и 10 етажите от долу стават пак ярки … да не стават ярки етажите от
+  // долу докато се слагат тези панели").
+  let reached = -Infinity;
+  for (const b of blocks) b.phase = null;
+  for (const b of sequence) { reached = Math.max(reached, b.stageOrder); b.phase = reached; }
   $('steps').style.display = blocks.some((b) => b.stage !== 'B') ? 'block' : 'none';
   placeLevels();
   $('stepRange').min = 0;
@@ -792,40 +801,54 @@ function restage(count = null) {
 }
 
 // How a block looks: the chosen one lit in the colour of choosing — one
-// bright blue, the same for every panel, glowing so it stands apart from the
-// panels' own blues (his 2026-10-09: „избран панел да светва в цвят за
-// селектиране"); the last one put up while stepping warmed in its own colour;
-// the rest in their own colour. ORIGIN unasked — the blue.
+// bright blue, the same for every panel, glowing with a blue halo so it
+// stands apart (his 2026-10-09: „избран панел да светва в цвят за
+// селектиране", „и селектирания го направи така да става"); every other
+// panel in its beige with a warm glow — the glow that used to mark only the
+// last one put up is now every panel's own (his „направи малко по топлото
+// светене да е главния цвят на панелите … да не свети последния панел. Само
+// селектиран в синьо"). The foundation keeps its concrete and wood. ORIGIN
+// unasked — the blue.
 const PICKED = new THREE.Color(0x2f7bff);
 const PICKED_GLOW = 0x0b3a99;
+const WARM = 0x553300;
+// The last panel put up while stepping: green, glowing, with a green halo
+// round it (his 2026-10-09, after „да не свети последния панел": „направи го
+// последния поставен панел в някакво зеленичко да свети ама можеш ли да го
+// направиш като да грее … с намалящ градиент"). ORIGIN unasked — the
+// greens, the halo's size.
+const NEWEST = new THREE.Color(0x8fe3a0);
+const NEWEST_GLOW = 0x0c5a24;
 
 // In 2D the stages under the one being put up now go pale: putting up the
-// floor, storey 1 (and the foundation under it) fades; putting up storey 2,
-// the floor too (his 2026-10-09: „в две дто когато минеш от първи етаж на
-// редене на под първия да избледнява, когато минеш от под на втори етаж пода
-// да избледнява"). The stage being put up is the last placed block's (at
-// step 0 the first one's). The foundation is pale in 2D all the time, storey
-// 1 too being put up on it (his „направи и фундамента да бледнее в две дто
-// докато редиш етаж 1"). ORIGIN unasked — how pale, the letters and lines
-// going with their panel.
+// floor, storey 1 fades; putting up storey 2, the floor too (his 2026-10-09:
+// „в две дто когато минеш от първи етаж на редене на под първия да
+// избледнява, когато минеш от под на втори етаж пода да избледнява"). The
+// stage being put up is the last placed block's phase (at step 0 the first
+// one's); a block goes pale when its own phase is lower — a late storey-1
+// panel stays bright while its phase is the one being built (see `restage`).
+// The foundation is pale in 2D all the time, storey 1 too being put up on it
+// (his „направи и фундамента да бледнее в две дто докато редиш етаж 1").
+// ORIGIN unasked — how pale, the letters and lines going with their panel.
 const PAPER = new THREE.Color(0xeef1f4);
 const paleEdges = new THREE.LineBasicMaterial({ color: 0x1f2a36, transparent: true, opacity: 0.15 });
 function pale(block) {
   if (!flat) return false;
   if (block.stage === 'B') return true;
   if (!sequence.length) return false;
-  const now = (shown > 0 ? sequence[shown - 1] : sequence[0]).stageOrder;
-  return block.stageOrder < now;
+  const now = (shown > 0 ? sequence[shown - 1] : sequence[0]).phase;
+  return (block.phase ?? block.stageOrder) < now;
 }
 
 function look(block) {
   const picked = block === selected;
-  const last = step !== null && step >= 0 && sequence[step] === block;
-  const faded = !picked && pale(block);
+  const fresh = !picked && block === newest;
+  const faded = !picked && !fresh && pale(block);
+  const warm = block.stage !== 'B' && !faded;
   for (const m of block.bodies) {
-    m.material.color.copy(picked ? PICKED : m.userData.base);
+    m.material.color.copy(picked ? PICKED : (fresh ? NEWEST : m.userData.base));
     if (faded) m.material.color.lerp(PAPER, 0.7);
-    m.material.emissive.setHex(picked ? PICKED_GLOW : (last ? 0x553300 : 0x000000));
+    m.material.emissive.setHex(picked ? PICKED_GLOW : (fresh ? NEWEST_GLOW : (warm ? WARM : 0x000000)));
   }
   for (const m of block.letters) {
     m.material.color.copy(m.userData.base);
@@ -834,18 +857,21 @@ function look(block) {
   if (block.lines) block.lines.material = faded ? paleEdges : edgeMaterial;
 }
 
-// count: how many of the sequence stand (0 … all); the last one put up is lit
-// while stepping.
-function setStep(count) {
+// count: how many of the sequence stand (0 … all); stepped: the count came
+// from ◀ ▶ or the slider — then the last one put up glows (a level shown
+// whole does not).
+let newest = null;
+function setStep(count, stepped = false) {
   changed();
   shown = Math.min(Math.max(count, 0), sequence.length);
-  step = shown < sequence.length ? shown - 1 : null;
+  newest = stepped && shown > 0 ? sequence[shown - 1] : null;
   for (const b of blocks) {
     const at = sequence.indexOf(b);
     b.object.visible = b.stage === 'B' || (at >= 0 && at < shown);
   }
   if (selected && !selected.object.visible) select(null);
   for (const b of blocks) look(b);
+  halo();
   $('stepRange').value = shown;
   if (shown === sequence.length && shown > 0) {
     $('stepWhat').textContent = `Видими: ${sequence.length}. „◀" маха, „▶" добавя по един.`;
@@ -862,7 +888,7 @@ function setStep(count) {
 }
 
 function move(delta) {
-  setStep(shown + delta);
+  setStep(shown + delta, true);
 }
 
 // The view takes in what the levels that are on will hold when every step
@@ -935,6 +961,7 @@ function select(block) {
   const before = selected;
   selected = block;
   if (before) look(before);
+  halo();
   if (!block) { $('info').style.display = 'none'; placeLevels(); return; }
   look(block);
   $('info').style.display = 'flex';
@@ -1012,7 +1039,7 @@ $('btnFit').onclick = () => fit();
 $('btn2d').onclick = () => setFlat(!flat);
 $('btnPrev').onclick = () => move(-1);
 $('btnNext').onclick = () => move(1);
-$('stepRange').oninput = (e) => setStep(Number(e.target.value));
+$('stepRange').oninput = (e) => setStep(Number(e.target.value), true);
 
 // Any button pressed, or the step slider moved, puts the chosen panel's card
 // away and lets the panel go (his 2026-10-09: „когато селектираш панел и се
@@ -1090,6 +1117,8 @@ if (inApp) {
 let composer = null;
 let renderPass = null;
 let gtao = null;
+let outline = null;         // the halo round the newest panel
+let outlinePicked = null;   // the halo round the chosen one
 let occlusion = true;
 let shadeWhileMoving = true;
 try {
@@ -1111,6 +1140,21 @@ try {
   gtao.blendIntensity = 0.9;
   gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12 });
   composer.addPass(gtao);
+  // A wide soft halo, fading outwards (his „с намалящ градиент"): green
+  // round the newest panel, blue round the chosen one (his „и селектирания го
+  // направи така да става").
+  const ring = (near, far) => {
+    const pass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera, []);
+    pass.visibleEdgeColor.set(near);
+    pass.hiddenEdgeColor.set(far);
+    pass.edgeStrength = 3;
+    pass.edgeGlow = 2;
+    pass.edgeThickness = 4;
+    composer.addPass(pass);
+    return pass;
+  };
+  outline = ring(0x3dff7a, 0x1a7a3a);
+  outlinePicked = ring(0x4d8dff, 0x1a3a8a);
   composer.addPass(new OutputPass());
 } catch (error) {
   composer = null;
@@ -1125,6 +1169,25 @@ function aim(cam) {
   if (!composer) return;
   renderPass.camera = cam;
   gtao.camera = cam;
+  // A halo reads depth by the camera's kind, fixed when its mask material
+  // is made — made again for the other kind.
+  for (const pass of [outline, outlinePicked]) {
+    if (pass.renderCamera === cam) continue;
+    pass.renderCamera = cam;
+    const mask = pass.getPrepareMaskMaterial();
+    mask.side = THREE.DoubleSide;
+    mask.fragmentShader = mask.fragmentShader.replace(/DEPTH_TO_VIEW_Z/g, `${cam.isPerspectiveCamera ? 'perspective' : 'orthographic'}DepthToViewZ`);
+    pass.prepareMaskMaterial.dispose();
+    pass.prepareMaskMaterial = mask;
+  }
+}
+
+// The green halo goes round the newest panel, unless it is the chosen one;
+// the blue one round the chosen panel.
+function halo() {
+  if (!outline) return;
+  outline.selectedObjects = newest && newest !== selected ? newest.bodies : [];
+  outlinePicked.selectedObjects = selected ? selected.bodies : [];
 }
 
 // 2D on and off. Each view keeps where it was; the levels and the step stay
