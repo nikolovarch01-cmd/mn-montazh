@@ -992,7 +992,11 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   ray.setFromCamera(p, view);
   const meshes = blocks.filter((b) => b.object.visible).flatMap((b) => b.bodies.concat(b.letters.filter((m) => m.visible)));
   const hit = ray.intersectObjects(meshes, false)[0];
-  select(hit ? blockOf(hit.object) : null);
+  // The foundation is never chosen: a tap on it lets go, as a tap on the
+  // empty screen does — and a panel behind it is not reached through it (his
+  // 2026-10-09: „фундамента да не може да се селектира").
+  const block = hit ? blockOf(hit.object) : null;
+  select(block && block.stage !== 'B' ? block : null);
 });
 
 // A file from the phone: the big button on the empty page (and a file dropped
