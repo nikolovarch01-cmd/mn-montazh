@@ -119,7 +119,13 @@
     box-shadow: 0 0 12px 4px rgba(16, 185, 129, .6), 0 1px 3px rgba(0, 0, 0, .25); }
   #steps .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   #steps .row button { font-size: 20px; }
-  #steps .what { color: var(--muted); margin-bottom: 2px; text-shadow: 0 0 3px #fff, 0 0 6px #fff, 0 0 10px #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The line of text on a see-through pad like a button's (his 2026-10-10:
+     „направи само надписа да е върху полупрозрачна подложка като на
+     бутон"). */
+  #steps .what { display: inline-block; max-width: 100%; box-sizing: border-box; color: var(--muted);
+    margin-bottom: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(255, 255, 255, .45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #steps .what b { color: var(--ink); }
   #empty { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
   #empty .card { max-width: 420px; text-align: center; padding: 24px 20px; }
@@ -1552,7 +1558,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'c41a837bb291';
+const PAGE_VERSION = '39b73fddee6e';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
