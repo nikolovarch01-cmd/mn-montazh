@@ -47,10 +47,14 @@
     box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .title b { display: block; overflow: hidden; text-overflow: ellipsis; }
   .title small { color: var(--muted); }
-  #layers { display: none; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; touch-action: pan-x; }
-  #layers::-webkit-scrollbar { display: none; }
-  #layers button { flex: none; min-height: 40px; border-radius: 20px; font-weight: 600; }
-  #layers button:not(.on) { color: var(--muted); background: rgba(255,255,255,.75); text-decoration: line-through; }
+  /* The levels, one above the other, storey 1 at the bottom; each a little
+     house lit green as far up as it shows (his 2026-10-09). */
+  #levels { position: fixed; left: 16px; bottom: calc(150px + env(safe-area-inset-bottom)); display: none;
+    flex-direction: column-reverse; gap: 8px; z-index: 2; }
+  #levels button { padding: 6px; min-width: 56px; min-height: 56px; border: 2px solid var(--line); }
+  #levels button.on { background: var(--card); color: var(--ink); border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(47,111,214,.3), var(--shadow); }
+  #levels svg { display: block; }
   .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .bottom > * { pointer-events: auto; }
@@ -63,9 +67,8 @@
   #info .no { margin-left: auto; font-size: 22px; font-weight: 700; white-space: nowrap; }
   #steps { display: none; }
   #steps input[type=range] { display: block; width: 100%; height: 40px; margin: 0; accent-color: var(--accent); touch-action: manipulation; }
-  #steps .row { display: grid; grid-template-columns: 1fr 1fr 1fr 1.4fr; gap: 8px; }
+  #steps .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   #steps .row button { box-shadow: none; font-size: 20px; }
-  #steps .row #btnAll { font-size: 16px; }
   #steps .what { color: var(--muted); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #steps .what b { color: var(--ink); }
   #empty { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
@@ -100,8 +103,9 @@
     <button id="btnFull" title="Цял екран" aria-label="Цял екран" hidden>⛶</button>
     <button id="btnOpen" title="Отвори файл" aria-label="Отвори файл">📂</button>
   </div>
-  <div class="bar" id="layers"></div>
 </div>
+
+<div id="levels"></div>
 
 <div class="bottom">
   <div class="card" id="info">
@@ -115,8 +119,6 @@
     <div class="row">
       <button id="btnPrev" aria-label="Назад">◀</button>
       <button id="btnNext" aria-label="Напред">▶</button>
-      <button id="btnPlay" aria-label="Пусни">⏵⏵</button>
-      <button id="btnAll" aria-label="Всичко">Всичко</button>
     </div>
   </div>
 </div>
@@ -285,11 +287,12 @@ function stageName(key) {
 let model = null;
 let blocks = [];          // { object, name, placement, stage, stageOrder, bodies, letters, colour }
 let stages = [];          // [{ key, order, on }]
+let levels = [];          // the stages with a button, bottom up (the foundation has none)
+let upTo = 0;             // the highest level shown
 let sequence = [];        // the blocks of the stages that are on, in the order they go up
 let step = null;          // index in sequence, or null = everything
 let lettersOn = true;
 let selected = null;
-let playing = null;
 
 const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x1f2a36, transparent: true, opacity: 0.55 });
 
@@ -320,7 +323,6 @@ function blockOf(object) {
 }
 
 function show(gltf, label) {
-  if (playing) play();
   select(null);
   clear();
   model = gltf.scene;
@@ -358,15 +360,19 @@ function show(gltf, label) {
   const keys = new Map();
   for (const x of blocks) if (!keys.has(x.stage)) keys.set(x.stage, x.stageOrder);
   stages = [...keys].map(([key, order]) => ({ key, order, on: true })).sort((p, q) => p.order - q.order);
-  const row = $('layers');
-  row.replaceChildren(...stages.map((st) => {
+  levels = stages.filter((st) => st.key !== 'B');
+  upTo = levels.length - 1;
+  const column = $('levels');
+  column.replaceChildren(...levels.map((st, i) => {
     const button = document.createElement('button');
-    button.textContent = stageName(st.key);
-    button.className = 'on';
-    button.onclick = () => { st.on = !st.on; button.classList.toggle('on', st.on); restage(); };
+    button.innerHTML = houseIcon(levels, i);
+    button.title = stageName(st.key);
+    button.setAttribute('aria-label', stageName(st.key));
+    button.onclick = () => showUpTo(i);
     return button;
   }));
-  row.style.display = stages.length > 1 ? 'flex' : 'none';
+  column.style.display = levels.length > 1 ? 'flex' : 'none';
+  markLevels();
 
   $('empty').style.display = 'none';
   setLetters(lettersOn);
@@ -375,10 +381,49 @@ function show(gltf, label) {
   fit();
 }
 
+// A level shows itself and everything under it, and hides what is above —
+// storey 1; then storey 1 and the floor; then the second storey on them; the
+// roof shows all. The foundation stands always. His 2026-10-09: „ако цъкнеш
+// едно не скрива едно а скрива всичко останало, ако цъкнеш флор показва 1
+// плус флор ако цъкнеш етаж две - 1+ флор + 2 и така на татък".
+function showUpTo(i) {
+  upTo = i;
+  for (const st of stages) st.on = st.key === 'B' || levels.indexOf(st) <= i;
+  markLevels();
+  step = null;
+  restage();
+  setStep(null);
+}
+
+function markLevels() {
+  [...$('levels').children].forEach((button, i) => button.classList.toggle('on', i === upTo));
+}
+
+// The little house of a level button: one band a storey, a thin slab a
+// floor, a gable the roof, bottom up; green as far as the button shows, the
+// rest grey.
+function houseIcon(list, lit) {
+  const width = 40;
+  const sizes = { storey: 11, slab: 3, roof: 12 };
+  const kinds = list.map((st) => (st.key === 'R' ? 'roof' : (st.key === 'F' ? 'slab' : 'storey')));
+  const total = kinds.reduce((sum, kind) => sum + sizes[kind], 0) + 2;
+  let y = total - 1;
+  const shapes = kinds.map((kind, i) => {
+    const h = sizes[kind];
+    const top = y - h;
+    y = top;
+    const fill = i <= lit ? '#2fbf71' : '#c8cfd6';
+    return kind === 'roof'
+      ? `<polygon points="2,${top + h} ${width - 2},${top + h} ${width / 2},${top}" fill="${fill}" stroke="#1f2a36" stroke-width="1.2" stroke-linejoin="round"/>`
+      : `<rect x="6" y="${top}" width="${width - 12}" height="${h}" fill="${fill}" stroke="#1f2a36" stroke-width="1.2"/>`;
+  });
+  return `<svg viewBox="0 0 ${width} ${total}" width="${width}" height="${Math.round(total * 1.1)}" aria-hidden="true">${shapes.join('')}</svg>`;
+}
+
 // The order the blocks go up: by placement number; the ones without a number
 // after them, stage by stage, by name. ORIGIN unasked 2026-10-09 — his „като
 // натискаш бутон напред се добавят всеки следващ панел"; the order without
-// numbers and the 1.2 s of the play are the assistant's.
+// numbers is the assistant's.
 function restage() {
   const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
   const current = step === null ? null : sequence[step];
@@ -416,11 +461,10 @@ function setStep(index) {
   if (selected) {
     if (selected.object.visible) light(selected, true); else select(null);
   }
-  $('btnAll').classList.toggle('on', index === null);
   if (!sequence.length) return;
   $('stepRange').value = index === null ? sequence.length - 1 : index;
   if (index === null) {
-    $('stepWhat').textContent = `Всички видими: ${sequence.length}. „▶" добавя по един.`;
+    $('stepWhat').textContent = `Видими: ${sequence.length}. „▶" добавя по един.`;
   } else {
     const b = sequence[index];
     const t = document.createElement('span');
@@ -435,17 +479,6 @@ function move(delta) {
   if (!sequence.length) return;
   const at = step === null ? (delta > 0 ? -1 : sequence.length) : step;
   setStep(Math.min(Math.max(at + delta, 0), sequence.length - 1));
-}
-
-function play() {
-  if (playing) { clearInterval(playing); playing = null; $('btnPlay').classList.remove('on'); return; }
-  if (!sequence.length) return;
-  if (step === null || step >= sequence.length - 1) setStep(0);
-  $('btnPlay').classList.add('on');
-  playing = setInterval(() => {
-    if (step >= sequence.length - 1) { play(); return; }
-    move(1);
-  }, 1200);
 }
 
 function fit() {
@@ -553,8 +586,6 @@ $('btnFit').onclick = fit;
 $('btnLetters').onclick = () => setLetters(!lettersOn);
 $('btnPrev').onclick = () => move(-1);
 $('btnNext').onclick = () => move(1);
-$('btnPlay').onclick = play;
-$('btnAll').onclick = () => { if (playing) play(); setStep(null); };
 $('stepRange').oninput = (e) => setStep(Number(e.target.value));
 
 for (const name of ['dragenter', 'dragover']) {
@@ -576,7 +607,7 @@ window.addEventListener('resize', () => {
 // Nothing of the page scrolls or zooms under the finger but the stage chips
 // and the step slider.
 document.addEventListener('touchmove', (e) => {
-  if (!(e.target.closest && e.target.closest('#layers, input[type=range]'))) e.preventDefault();
+  if (!(e.target.closest && e.target.closest('input[type=range]'))) e.preventDefault();
 }, { passive: false });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 
