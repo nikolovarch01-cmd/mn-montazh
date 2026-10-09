@@ -53,16 +53,16 @@
   #btn2d { font-weight: 700; font-size: 16px; }
   /* The levels, one above the other, storey 1 at the bottom; each a little
      house lit green as far up as it shows (his 2026-10-09). */
-  /* A drawer against the left edge, high up, where nothing comes and goes;
-     swiped left it tucks away to its grip, swiped right (or the grip tapped)
-     it comes back (his 2026-10-09: „по дефолт позиционирани по-нагоре …
-     по-дискретни — забий ги малко в лявата страна … може да се прибират с
-     плъзгане"). */
-  #levels { position: fixed; left: 0; top: calc(84px + env(safe-area-inset-top)); display: none; z-index: 2;
-    align-items: center; padding: 5px 0 5px 3px; border-radius: 0 20px 20px 0;
+  /* A drawer against the right edge, a third of the way down; swiped right
+     it tucks away to its grip, swiped left (or the grip tapped) it comes back
+     (his 2026-10-09: „по дефолт позиционирани по-нагоре … по-дискретни …
+     може да се прибират с плъзгане", then on 2026-10-10 „сложи чекмеджето от
+     дясно и малко по центрирано"). ORIGIN unasked — the third. */
+  #levels { position: fixed; right: 0; top: calc(30% + env(safe-area-inset-top)); display: none; z-index: 2;
+    align-items: center; padding: 5px 3px 5px 0; border-radius: 20px 0 0 20px;
     background: rgba(255,255,255,.72); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     box-shadow: 0 6px 22px rgba(20,30,45,.16); transition: transform .25s ease; touch-action: none; }
-  #levels.tucked { transform: translateX(calc(-100% + 16px)); }
+  #levels.tucked { transform: translateX(calc(100% - 16px)); }
   #levelButtons { display: flex; flex-direction: column-reverse; gap: 2px; }
   #grip { width: 16px; align-self: stretch; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   #grip::before { content: ''; width: 4px; height: 34px; border-radius: 2px; background: #9aa6b2; }
@@ -127,7 +127,7 @@
   </div>
 </div>
 
-<div id="levels"><div id="levelButtons"></div><div id="grip" aria-label="Скрий / покажи етажите"></div></div>
+<div id="levels"><div id="grip" aria-label="Скрий / покажи етажите"></div><div id="levelButtons"></div></div>
 
 <div class="bottom">
   <div class="card" id="steps">
@@ -698,7 +698,7 @@ function markLevels() {
   [...$('levelButtons').children].forEach((button, i) => button.classList.toggle('on', i === upTo));
 }
 
-// Swipe the drawer left to tuck it away, right (or tap the grip) to bring it
+// Swipe the drawer right to tuck it away, left (or tap the grip) to bring it
 // back; a swipe is no press of the button it started on. Remembered on this
 // phone.
 (() => {
@@ -714,8 +714,8 @@ function markLevels() {
   drawer.addEventListener('pointermove', (e) => {
     if (from === null) return;
     const dx = e.clientX - from;
-    if (dx < -28 && !drawer.classList.contains('tucked')) { tuck(true); swiped = true; from = null; }
-    if (dx > 28 && drawer.classList.contains('tucked')) { tuck(false); swiped = true; from = null; }
+    if (dx > 28 && !drawer.classList.contains('tucked')) { tuck(true); swiped = true; from = null; }
+    if (dx < -28 && drawer.classList.contains('tucked')) { tuck(false); swiped = true; from = null; }
   });
   drawer.addEventListener('pointerup', () => { from = null; });
   drawer.addEventListener('click', (e) => {
@@ -906,7 +906,7 @@ function fit(both = false) {
 }
 
 // The plan in the free part of the screen: under the buttons at the top,
-// over the steps at the bottom, right of the levels.
+// over the steps at the bottom, left of the levels.
 function fitPlan(box) {
   const size = box.getSize(new THREE.Vector3());
   const centre = box.getCenter(new THREE.Vector3());
@@ -915,8 +915,8 @@ function fitPlan(box) {
   const top = document.querySelector('.top').getBoundingClientRect().bottom + 8;
   const bottom = document.querySelector('.bottom').getBoundingClientRect().top - 8;
   const drawer = $('levels');
-  const left = (drawer.style.display === 'none' ? 0 : Math.max(drawer.getBoundingClientRect().right, 0)) + 8;
-  const right = w - 8;
+  const left = 8;
+  const right = (drawer.style.display === 'none' ? w : Math.min(drawer.getBoundingClientRect().left, w)) - 8;
   const across = Math.abs(size.dot(planControls.screenRight));
   const upward = Math.abs(size.dot(planControls.screenUp));
   const perPixel = Math.max(across / Math.max(right - left, 50), upward / Math.max(bottom - top, 50), 0.001) * 1.1;
