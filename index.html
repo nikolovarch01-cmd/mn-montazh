@@ -999,7 +999,7 @@ function move(delta) {
 }
 
 // The 3D view takes in what stands now — at the start, the bare foundation,
-// in the middle of the free part of the screen and as big as fits (his
+// in the middle of the screen and as big as fits (his
 // 2026-10-10, with a picture of it: „направи при старт фундамента да е така
 // центриран и зумнат"); ⌂ does the same at any step. The 2D plan takes in
 // the whole house (its outline from above is the foundation's anyway).
@@ -1068,9 +1068,8 @@ function fitTurn(box) {
   controls.target.copy(centre);
   controls.lookFrom(centre.clone().addScaledVector(direction, distance));
   controls.update();
-  camera.updateMatrixWorld();
-  controls.pan(0, (top + bottom) / 2 - h / 2);
-  controls.update();
+  // In the middle of the screen, not lifted into the free part (his
+  // 2026-10-10: „много нагоре си мръднал фундамента при старт").
 }
 
 // The letters show always since the „Aa" button went (his „остави само
@@ -1534,7 +1533,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'ca12cf75c6b8';
+const PAGE_VERSION = '53835315d4c8';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
