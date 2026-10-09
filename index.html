@@ -321,8 +321,8 @@ class PlanControls {
   constructor(camera, element) {
     this.camera = camera;
     this.element = element;
-    this.right = new THREE.Vector3(0, 0, 1);   // glTF +z = SketchUp −y
-    this.up = new THREE.Vector3(1, 0, 0);      // glTF +x = SketchUp +x
+    this.screenRight = new THREE.Vector3(0, 0, 1);   // glTF +z = SketchUp −y
+    this.screenUp = new THREE.Vector3(1, 0, 0);      // glTF +x = SketchUp +x
     this.target = new THREE.Vector3();
     this.half = 10;       // half the height of the screen, in metres
     this.height = 100;    // where the camera hangs
@@ -372,7 +372,7 @@ class PlanControls {
   // The plan follows the finger.
   pan(dx, dy) {
     const scale = (2 * this.half) / Math.max(this.element.clientHeight, 1);
-    this.target.addScaledVector(this.right, -dx * scale).addScaledVector(this.up, dy * scale);
+    this.target.addScaledVector(this.screenRight, -dx * scale).addScaledVector(this.screenUp, dy * scale);
   }
   // The point of the plan under (x, y) stays under it.
   zoomAt(factor, x, y) {
@@ -382,8 +382,8 @@ class PlanControls {
     const nx = ((x - rect.left) / rect.width) * 2 - 1;
     const ny = -((y - rect.top) / rect.height) * 2 + 1;
     const point = this.target.clone()
-      .addScaledVector(this.right, nx * this.half * (rect.width / Math.max(rect.height, 1)))
-      .addScaledVector(this.up, ny * this.half);
+      .addScaledVector(this.screenRight, nx * this.half * (rect.width / Math.max(rect.height, 1)))
+      .addScaledVector(this.screenUp, ny * this.half);
     this.target.sub(point).multiplyScalar(f).add(point);
     this.half = next;
   }
@@ -395,7 +395,7 @@ class PlanControls {
     c.top = this.half;
     c.bottom = -this.half;
     c.position.set(this.target.x, this.height, this.target.z);
-    c.up.copy(this.up);
+    c.up.copy(this.screenUp);
     c.lookAt(this.target.x, this.height - 1, this.target.z);
     c.updateProjectionMatrix();
   }
@@ -802,13 +802,13 @@ function fitPlan(box) {
   const drawer = $('levels');
   const left = (drawer.style.display === 'none' ? 0 : Math.max(drawer.getBoundingClientRect().right, 0)) + 8;
   const right = w - 8;
-  const across = Math.abs(size.dot(planControls.right));
-  const upward = Math.abs(size.dot(planControls.up));
+  const across = Math.abs(size.dot(planControls.screenRight));
+  const upward = Math.abs(size.dot(planControls.screenUp));
   const perPixel = Math.max(across / Math.max(right - left, 50), upward / Math.max(bottom - top, 50), 0.001) * 1.1;
   planControls.half = (perPixel * h) / 2;
   planControls.target.copy(centre)
-    .addScaledVector(planControls.right, -((left + right) / 2 - w / 2) * perPixel)
-    .addScaledVector(planControls.up, ((top + bottom) / 2 - h / 2) * perPixel);
+    .addScaledVector(planControls.screenRight, -((left + right) / 2 - w / 2) * perPixel)
+    .addScaledVector(planControls.screenUp, ((top + bottom) / 2 - h / 2) * perPixel);
   // The camera hangs over the whole model, whatever levels are on now, so a
   // level switched on later is not cut off (the review of 2026-10-09).
   const whole = new THREE.Box3().setFromObject(model);
@@ -986,16 +986,16 @@ if (inApp) {
 // The lines went jagged because the shaded picture was drawn without
 // smoothing of edges and at a lower resolution than the plain one; now the
 // picture is drawn smoothed (up to 4 samples) and at the screen's own
-// resolution. The shading itself is worked out at half the resolution — it
-// is soft anyway, and that is most of its cost (his 2026-10-09, after the
-// first always-on version: „управляването с пръсти е една идея по нервно").
-// A phone that cannot keep up — under about 14 pictures a second while the
+// resolution, the shading too. (For an hour on 2026-10-09 the shading was
+// worked out at half the resolution, on a guess that it made the fingers
+// „една идея по нервно" — measured by nobody; his „кой е казал че са тежки",
+// and back.) `?ao=0` in the link draws without the shading — to compare on
+// a phone. A phone that cannot keep up — under about 14 pictures a second while the
 // model turns — shades only when the model stands still (a quarter of a
 // second after it stops), for the rest of the visit; one that takes over
 // 400 ms for a single shaded picture is spared the shading altogether. A
 // picture in which new shaders were made is not counted (the review of
-// 2026-10-09). ORIGIN unasked — the guards and their numbers, the half.
-const SHADE_SCALE = 0.5;
+// 2026-10-09). ORIGIN unasked — the guards and their numbers, `?ao=0`.
 let composer = null;
 let renderPass = null;
 let gtao = null;
@@ -1005,6 +1005,7 @@ try {
   // The shading needs WebGL 2 and pictures in half floats; without them the
   // picture is drawn plain. The smoothing takes what the graphics chip gives
   // for such pictures, up to 4.
+  if (new URLSearchParams(location.search).get('ao') === '0') throw new Error('asked plain');
   if (!renderer.capabilities.isWebGL2 || !renderer.extensions.has('EXT_color_buffer_float')) throw new Error('no float targets');
   const gl = renderer.getContext();
   const counts = gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES);
@@ -1016,8 +1017,6 @@ try {
   renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
   gtao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
-  const sizeShading = gtao.setSize.bind(gtao);
-  gtao.setSize = (width, height) => sizeShading(Math.max(1, Math.round(width * SHADE_SCALE)), Math.max(1, Math.round(height * SHADE_SCALE)));
   gtao.blendIntensity = 0.9;
   gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12 });
   composer.addPass(gtao);
