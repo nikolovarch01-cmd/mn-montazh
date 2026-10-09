@@ -368,7 +368,10 @@ function show(gltf, label) {
     button.innerHTML = houseIcon(levels, i);
     button.title = stageName(st.key);
     button.setAttribute('aria-label', stageName(st.key));
-    button.onclick = () => showUpTo(i);
+    // Pressed again, the level goes too and the one under it stays (his
+    // „като натиснеш още един път първия етаж да се скрива и той" — then only
+    // the foundation is left).
+    button.onclick = () => showUpTo(i === upTo ? i - 1 : i);
     return button;
   }));
   column.style.display = levels.length > 1 ? 'flex' : 'none';
