@@ -37,9 +37,10 @@
   /* The buttons' white see-through (his 2026-10-10: „направи бялото на
      бутоните леко прозрачно", then „на прав път сме но бутоните още по
      прозрачни", „още една идея по-прозрачни да са", „увеличи още малко
-     прозрачността на бутоните"). */
+     прозрачността на бутоните"); the blur through them lighter (his „една
+     идея намали и размазването през бутоните"). */
   button { font: inherit; color: inherit; border: 1px solid var(--line); background: rgba(255, 255, 255, .2);
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
     border-radius: 14px; padding: 0 14px; min-height: 48px; min-width: 48px; cursor: pointer; box-shadow: var(--shadow);
     touch-action: manipulation; font-size: 17px; }
   button:active { transform: translateY(1px); }
@@ -125,7 +126,7 @@
      бутон"). */
   #steps .what { display: inline-block; max-width: 100%; box-sizing: border-box; color: var(--muted);
     margin-bottom: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 12px;
-    background: rgba(255, 255, 255, .2); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: rgba(255, 255, 255, .2); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
     box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #steps .what b { color: var(--ink); }
   #empty { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
@@ -1626,7 +1627,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'e05e4b0879ab';
+const PAGE_VERSION = '2b08692aca06';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
