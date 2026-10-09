@@ -97,7 +97,22 @@
      пробваме да махнем общия бял фон обобщаващ копчетата и да оставим цвят
      само по копчетата"). */
   #steps { display: none; background: transparent; box-shadow: none; padding: 0 2px; }
-  #steps input[type=range] { display: block; width: 100%; height: 40px; margin: 0; accent-color: var(--accent); touch-action: manipulation; }
+  /* The slider green and glowing (his 2026-10-10: „слайдера да е зелен с
+     грееш амбиент"): the part done green, the knob green with a soft green
+     glow round it. ORIGIN unasked — the sizes and the glow. */
+  #steps input[type=range] { display: block; width: 100%; height: 40px; margin: 0; touch-action: manipulation;
+    -webkit-appearance: none; appearance: none; background: transparent; --fill: 0%; }
+  #steps input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px;
+    background: linear-gradient(to right, #10b981 var(--fill), #d5dbe1 var(--fill));
+    box-shadow: 0 0 8px rgba(16, 185, 129, .35); }
+  #steps input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px;
+    margin-top: -9px; border-radius: 50%; border: 3px solid #fff; background: #10b981;
+    box-shadow: 0 0 12px 4px rgba(16, 185, 129, .6), 0 1px 3px rgba(0, 0, 0, .25); }
+  #steps input[type=range]::-moz-range-track { height: 6px; border-radius: 3px; background: #d5dbe1; }
+  #steps input[type=range]::-moz-range-progress { height: 6px; border-radius: 3px; background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, .35); }
+  #steps input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; background: #10b981;
+    box-shadow: 0 0 12px 4px rgba(16, 185, 129, .6), 0 1px 3px rgba(0, 0, 0, .25); }
   #steps .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   #steps .row button { font-size: 20px; }
   #steps .what { color: var(--muted); margin-bottom: 2px; text-shadow: 0 0 3px #fff, 0 0 6px #fff, 0 0 10px #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -176,6 +191,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -937,6 +953,9 @@ function look(block) {
     if (faded) m.material.color.lerp(PAPER, 0.8);
   }
   if (block.lines) block.lines.material = faded ? paleEdges : edgeMaterial;
+  // What stands (not pale, not the foundation) casts the 2D shadow.
+  const casts = flat && !faded && block.stage !== 'B';
+  for (const m of block.bodies) { if (casts) m.layers.enable(1); else m.layers.disable(1); }
 }
 
 // count: how many of the sequence stand (0 … all); stepped: the count came
@@ -956,6 +975,7 @@ function setStep(count, stepped = false) {
   halo();
   markLevels();
   $('stepRange').value = shown;
+  $('stepRange').style.setProperty('--fill', `${sequence.length ? (shown / sequence.length) * 100 : 0}%`);
   // The last panel standing: its name, its placement number, and where it
   // stands in the order — „EW2 01 · № 25 · 25/55" (his 2026-10-10: „направи
   // текста първо да пише името на панела после номера на сглобяване и накрая
@@ -978,16 +998,24 @@ function move(delta) {
   setStep(shown + delta, true);
 }
 
-// The view takes in what the levels that are on will hold when every step
-// stands (and the foundation) — not only what stands now, so it does not jump
-// at step 0. both: the 3D and the 2D view together (a model just opened).
+// The 3D view takes in what stands now — at the start, the bare foundation,
+// in the middle of the free part of the screen and as big as fits (his
+// 2026-10-10, with a picture of it: „направи при старт фундамента да е така
+// центриран и зумнат"); ⌂ does the same at any step. The 2D plan takes in
+// the whole house (its outline from above is the foundation's anyway).
+// both: the 3D and the 2D view together (a model just opened).
 function fit(both = false) {
   if (!model) return;
-  const box = new THREE.Box3();
-  for (const block of blocks) if (block.stage === 'B' || sequence.includes(block)) box.expandByObject(block.object);
-  if (box.isEmpty()) box.setFromObject(model);
-  if (both || flat) fitPlan(box);
-  if (both || !flat) fitTurn(box);
+  const planned = new THREE.Box3();
+  const standing = new THREE.Box3();
+  for (const block of blocks) {
+    if (block.stage === 'B' || sequence.includes(block)) planned.expandByObject(block.object);
+    if (block.object.visible) standing.expandByObject(block.object);
+  }
+  if (planned.isEmpty()) planned.setFromObject(model);
+  if (standing.isEmpty()) standing.copy(planned);
+  if (both || flat) fitPlan(planned);
+  if (both || !flat) fitTurn(standing);
 }
 
 // The plan in the free part of the screen: under the buttons at the top,
@@ -1022,7 +1050,14 @@ function fitTurn(box) {
   const size = box.getSize(new THREE.Vector3());
   const centre = box.getCenter(new THREE.Vector3());
   const radius = Math.max(size.length() / 2, 0.5);
-  const distance = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * (camera.aspect < 1 ? 1.25 / camera.aspect : 1.05);
+  // The free part of the screen: under the buttons at the top, over the
+  // controls at the bottom; the model as big as fits in it, both ways.
+  const h = window.innerHeight;
+  const top = document.querySelector('.top').getBoundingClientRect().bottom + 8;
+  const bottom = document.querySelector('.bottom').getBoundingClientRect().top - 8;
+  const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const across = Math.min(half * (Math.max(bottom - top, 100) / h), half * camera.aspect);
+  const distance = (radius / Math.sin(Math.atan(across))) * 1.02;
   // From the house's −x side and the back, so the veranda faces us — the
   // view of before turned half round (his 2026-10-09: „на 180 3Д-то, така че
   // верандата на къщата да гледа към нас").
@@ -1032,6 +1067,9 @@ function fitTurn(box) {
   camera.updateProjectionMatrix();
   controls.target.copy(centre);
   controls.lookFrom(centre.clone().addScaledVector(direction, distance));
+  controls.update();
+  camera.updateMatrixWorld();
+  controls.pan(0, (top + bottom) / 2 - h / 2);
   controls.update();
 }
 
@@ -1208,6 +1246,105 @@ if (inApp) {
 // 400 ms for a single shaded picture is spared the shading altogether. A
 // picture in which new shaders were made is not counted (the review of
 // 2026-10-09). ORIGIN unasked — the guards and their numbers, `?ao=0`.
+// In 2D a narrow soft shadow hugs every panel that stands, on what is under
+// it — dark at the panel's edge, gone a hand's width out: it sets the panels
+// off and leaves the floor clean (his 2026-10-10: „можем ли в 2D-то да сложим
+// сенки от поставените модули независимо че тези под тях са избледнели …
+// искам амбиентни такива меки … тип амбиент оклужън не панел после светло
+// после сянка … идеята е да подчертаят панелите. А не да замърсяват
+// пространството"). The screen-space corner shading reads a plan from above
+// badly — a light strip at the wall, the shadow beyond it — so this one is
+// its own: the standing panels' outline from above, blurred, laid only on
+// what is lower and only where there is something. ORIGIN unasked — the
+// width (about 15 cm of blur) and the depth.
+const SHADOW_SPREAD_M = 0.12;
+const SHADOW_DEPTH = 1.8;
+class PlanShadowPass extends Pass {
+  constructor() {
+    super();
+    this.enabled = false;
+    this.camera = null;
+    this.depth = null;   // the depth of the whole picture (the shading's own)
+    const target = () => new THREE.WebGLRenderTarget(1, 1);
+    this.mask = target();
+    this.blurA = target();
+    this.blurB = target();
+    this.white = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const vertexShader = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+    this.blur = new THREE.ShaderMaterial({
+      uniforms: { tMap: { value: null }, step: { value: new THREE.Vector2() } },
+      vertexShader,
+      fragmentShader: `uniform sampler2D tMap; uniform vec2 step; varying vec2 vUv;
+        void main() {
+          float sum = 0.0; float weights = 0.0;
+          for (int i = -6; i <= 6; i++) {
+            float w = exp(-float(i * i) / 18.0);
+            sum += texture2D(tMap, vUv + step * float(i)).r * w;
+            weights += w;
+          }
+          gl_FragColor = vec4(vec3(sum / weights), 1.0);
+        }`
+    });
+    this.mix = new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: null }, tSharp: { value: null }, tSoft: { value: null }, tDepth: { value: null }, depth: { value: SHADOW_DEPTH } },
+      vertexShader,
+      fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tSharp; uniform sampler2D tSoft; uniform sampler2D tDepth; uniform float depth; varying vec2 vUv;
+        void main() {
+          vec4 colour = texture2D(tDiffuse, vUv);
+          float under = 1.0 - smoothstep(0.25, 0.75, texture2D(tSharp, vUv).r);
+          float something = texture2D(tDepth, vUv).x < 0.99999 ? 1.0 : 0.0;
+          float shade = min(depth * texture2D(tSoft, vUv).r * under * something, 0.7);
+          gl_FragColor = vec4(colour.rgb * (1.0 - shade), colour.a);
+        }`
+    });
+    this.quad = new FullScreenQuad(null);
+  }
+  setSize(width, height) {
+    this.size = [Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(height / 2))];
+    for (const t of [this.mask, this.blurA, this.blurB]) t.setSize(this.size[0], this.size[1]);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    // 1. What stands, white on black, seen from above (layer 1).
+    const cam = this.camera;
+    const layers = cam.layers.mask;
+    const background = scene.background;
+    const clear = renderer.getClearColor(new THREE.Color());
+    const clearAlpha = renderer.getClearAlpha();
+    cam.layers.set(1);
+    scene.background = null;
+    scene.overrideMaterial = this.white;
+    renderer.setClearColor(0x000000, 1);
+    renderer.setRenderTarget(this.mask);
+    renderer.clear();
+    renderer.render(scene, cam);
+    scene.overrideMaterial = null;
+    scene.background = background;
+    cam.layers.mask = layers;
+    renderer.setClearColor(clear, clearAlpha);
+    // 2. Blurred by a width in metres, whatever the zoom.
+    const perMetre = this.size[1] / (cam.top - cam.bottom);
+    const sigma = THREE.MathUtils.clamp(SHADOW_SPREAD_M * perMetre, 1, 14);
+    this.quad.material = this.blur;
+    this.blur.uniforms.tMap.value = this.mask.texture;
+    this.blur.uniforms.step.value.set(sigma / 3 / this.size[0], 0);
+    renderer.setRenderTarget(this.blurA);
+    this.quad.render(renderer);
+    this.blur.uniforms.tMap.value = this.blurA.texture;
+    this.blur.uniforms.step.value.set(0, sigma / 3 / this.size[1]);
+    renderer.setRenderTarget(this.blurB);
+    this.quad.render(renderer);
+    // 3. Laid on what is lower.
+    this.quad.material = this.mix;
+    this.mix.uniforms.tDiffuse.value = readBuffer.texture;
+    this.mix.uniforms.tSharp.value = this.mask.texture;
+    this.mix.uniforms.tSoft.value = this.blurB.texture;
+    this.mix.uniforms.tDepth.value = this.depth;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.quad.render(renderer);
+  }
+}
+let planShadow = null;
+
 let composer = null;
 let renderPass = null;
 let gtao = null;
@@ -1234,6 +1371,10 @@ try {
   gtao.blendIntensity = 0.9;
   gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12 });
   composer.addPass(gtao);
+  planShadow = new PlanShadowPass();
+  planShadow.camera = planCamera;
+  planShadow.depth = gtao.depthTexture;
+  composer.addPass(planShadow);
   // A wide soft halo, fading outwards (his „с намалящ градиент"): green
   // round the newest panel, blue round the chosen one (his „и селектирания го
   // направи така да става").
@@ -1259,20 +1400,11 @@ window.addEventListener('resize', () => { if (composer) composer.setSize(window.
 // switch is not touched: in three.js 0.160 the shading reads depth through
 // the camera's own projection, for the flat 2D camera too — the review of
 // 2026-10-09.)
-// In 2D the shading reaches wider and deeper: soft ambient shadows from what
-// stands onto what is under it, pale or not — no sun, no direction (his
-// 2026-10-10: „можем ли в 2D-то да сложим сенки от поставените модули
-// независимо че тези под тях са избледнели … не знам дали от слънце. Искам
-// амбиентни такива меки"). ORIGIN unasked — the numbers.
-const SHADE_3D = { radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1 };
-const SHADE_2D = { radius: 2, distanceExponent: 1, thickness: 4, scale: 2.2 };
 function aim(cam) {
   if (!composer) return;
   renderPass.camera = cam;
   gtao.camera = cam;
-  gtao.updateGtaoMaterial(cam.isPerspectiveCamera ? SHADE_3D : SHADE_2D);
-  // Wider shading is grainier — smoothed over a wider ring in 2D.
-  gtao.updatePdMaterial({ radius: cam.isPerspectiveCamera ? 8 : 16 });
+  planShadow.enabled = !cam.isPerspectiveCamera;
   // A halo reads depth by the camera's kind, fixed when its mask material
   // is made — made again for the other kind.
   for (const pass of [outline, outlinePicked]) {
@@ -1402,7 +1534,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'c5f31a8c5952';
+const PAGE_VERSION = 'ca12cf75c6b8';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
