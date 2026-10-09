@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f2a36">
+<title>Монтажна схема</title>
+<meta name="description" content="Монтажна схема на панелите — 3D, на телефона.">
+<style>
+  :root {
+    --ink: #1f2a36;
+    --muted: #5d6b7a;
+    --paper: #eef1f4;
+    --card: #ffffff;
+    --line: #d5dbe1;
+    --accent: #2f6fd6;
+    --shadow: 0 6px 24px rgba(20, 30, 45, .16);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink);
+    font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; touch-action: none; }
+  /* Made for the phone first (his 2026-10-09: „страницата трябва да е най вече
+     за телефон пригодена"): every control a thumb's size, nothing that needs
+     a mouse, no zoom on a double tap, no text picked up by a long press. */
+  body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  button { font: inherit; color: inherit; border: 1px solid var(--line); background: var(--card);
+    border-radius: 14px; padding: 0 14px; min-height: 48px; min-width: 48px; cursor: pointer; box-shadow: var(--shadow);
+    touch-action: manipulation; font-size: 17px; }
+  button:active { transform: translateY(1px); }
+  button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .top { position: fixed; top: 0; left: 0; right: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 0;
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .top > * { pointer-events: auto; }
+  .bar { display: flex; gap: 8px; align-items: center; }
+  .title { flex: 1; min-width: 0; background: rgba(255,255,255,.9); border-radius: 12px; padding: 6px 12px;
+    box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .title b { display: block; overflow: hidden; text-overflow: ellipsis; }
+  .title small { color: var(--muted); }
+  #layers { display: none; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  #layers::-webkit-scrollbar { display: none; }
+  #layers button { flex: none; min-height: 40px; border-radius: 20px; font-weight: 600; }
+  #layers button:not(.on) { color: var(--muted); background: rgba(255,255,255,.75); text-decoration: line-through; }
+  .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .bottom > * { pointer-events: auto; }
+  .card { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 14px; }
+  #info { display: none; align-items: center; gap: 10px; }
+  #info .swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(0,0,0,.2); flex: none; }
+  #info .name { min-width: 0; }
+  #info b { font-size: 18px; display: block; }
+  #info small { color: var(--muted); }
+  #info .no { margin-left: auto; font-size: 22px; font-weight: 700; white-space: nowrap; }
+  #steps { display: none; }
+  #steps input[type=range] { display: block; width: 100%; height: 40px; margin: 0; accent-color: var(--accent); touch-action: manipulation; }
+  #steps .row { display: grid; grid-template-columns: 1fr 1fr 1fr 1.4fr; gap: 8px; }
+  #steps .row button { box-shadow: none; font-size: 20px; }
+  #steps .row #btnAll { font-size: 16px; }
+  #steps .what { color: var(--muted); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #steps .what b { color: var(--ink); }
+  #empty { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+  #empty .card { max-width: 420px; text-align: center; padding: 24px 20px; }
+  #empty h1 { font-size: 20px; margin: 0 0 8px; }
+  #empty p { color: var(--muted); margin: 0 0 16px; }
+  #empty.drag .card { outline: 3px dashed var(--accent); outline-offset: 6px; }
+  #busy { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; }
+  #busy .card { min-width: 220px; text-align: center; }
+  #busy .meter { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  #busy .meter i { display: block; height: 100%; width: 0; background: var(--accent); }
+  #file { display: none; }
+  @media (min-width: 720px) {
+    .bottom { left: 50%; right: auto; transform: translateX(-50%); width: 640px; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+
+<div class="top">
+  <div class="bar">
+    <div class="title" id="title"><b>Монтажна схема</b><small>няма отворен модел</small></div>
+    <button id="btnLetters" class="on" title="Надписите" aria-label="Надписи">Aa</button>
+    <button id="btnFit" title="Целият модел" aria-label="Целият модел">⤢</button>
+    <button id="btnFull" title="Цял екран" aria-label="Цял екран" hidden>⛶</button>
+    <button id="btnOpen" title="Отвори файл" aria-label="Отвори файл">📂</button>
+  </div>
+  <div class="bar" id="layers"></div>
+</div>
+
+<div class="bottom">
+  <div class="card" id="info">
+    <span class="swatch" id="infoSwatch"></span>
+    <span class="name"><b id="infoName"></b><small id="infoStage"></small></span>
+    <span class="no" id="infoNo"></span>
+  </div>
+  <div class="card" id="steps">
+    <div class="what" id="stepWhat"></div>
+    <input type="range" id="stepRange" min="0" max="0" value="0" aria-label="Стъпка на монтажа">
+    <div class="row">
+      <button id="btnPrev" aria-label="Назад">◀</button>
+      <button id="btnNext" aria-label="Напред">▶</button>
+      <button id="btnPlay" aria-label="Пусни">⏵⏵</button>
+      <button id="btnAll" aria-label="Всичко">Всичко</button>
+    </div>
+  </div>
+</div>
+
+<div id="empty">
+  <div class="card">
+    <h1>Монтажна схема</h1>
+    <p>Отвори файла <b>.glb</b>, записан от SketchUp (MN Assembly). Въртиш с пръст, приближаваш с два пръста, цъкаш панел, за да видиш името и номера му.</p>
+    <button id="btnOpenBig">📂 Отвори файл</button>
+  </div>
+</div>
+
+<div id="busy"><div class="card"><div id="busyText">Зарежда…</div><div class="meter"><i id="busyBar"></i></div></div></div>
+<input type="file" id="file" accept=".glb,model/gltf-binary">
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const $ = (id) => document.getElementById(id);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+$('stage').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xeef1f4);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.05, 5000);
+camera.position.set(20, 15, 20);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a96a3, 2.2));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(0.6, 1, 0.4);
+scene.add(sun);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.12;
+controls.screenSpacePanning = true;
+
+// The stages of the assembly, as the plugin writes them (S1 storey 1 with the
+// stair, F the floor, S2 storey 2, R the roof).
+function stageName(key) {
+  const storey = /^S(\d+)$/.exec(key || '');
+  if (storey) return `Етаж ${storey[1]}`;
+  return { F: 'Под', R: 'Покрив' }[key] || key || 'Други';
+}
+
+let model = null;
+let blocks = [];          // { object, name, placement, stage, stageOrder, bodies, letters, colour }
+let stages = [];          // [{ key, order, on }]
+let sequence = [];        // the blocks of the stages that are on, in the order they go up
+let step = null;          // index in sequence, or null = everything
+let lettersOn = true;
+let selected = null;
+let playing = null;
+
+const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x1f2a36, transparent: true, opacity: 0.55 });
+
+const isLetters = (mesh) => ((mesh.material && mesh.material.name) || '').toLowerCase().startsWith('mn assembly letters');
+const numbered = (b) => Number.isInteger(b.placement);
+
+function busy(text, part) {
+  $('busy').style.display = text ? 'flex' : 'none';
+  if (text) $('busyText').textContent = text;
+  $('busyBar').style.width = `${Math.round((part || 0) * 100)}%`;
+}
+
+function clear() {
+  if (!model) return;
+  scene.remove(model);
+  model.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+  model = null;
+  blocks = [];
+  selected = null;
+}
+
+function blockOf(object) {
+  for (let o = object; o; o = o.parent) {
+    const found = blocks.find((b) => b.object === o);
+    if (found) return found;
+  }
+  return null;
+}
+
+function show(gltf, label) {
+  clear();
+  model = gltf.scene;
+  model.traverse((o) => {
+    const data = o.userData || {};
+    if (data.name !== undefined && data.colour !== undefined) {
+      blocks.push({
+        object: o, name: data.name, placement: data.placement ?? null,
+        stage: data.stage || 'S1', stageOrder: Number.isFinite(data.stage_order) ? data.stage_order : 1,
+        bodies: [], letters: []
+      });
+    }
+  });
+  for (const block of blocks) {
+    block.object.traverse((o) => {
+      if (!o.isMesh) return;
+      o.material = o.material.clone();   // its own material: lighting one block lights only it
+      if (isLetters(o)) {
+        block.letters.push(o);
+      } else {
+        block.bodies.push(o);
+        block.colour = o.material.color.clone();
+        o.add(new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 25), edgeMaterial));
+      }
+    });
+  }
+  scene.add(model);
+  const extras = (gltf.scenes && gltf.scenes[0] && gltf.scenes[0].userData) || {};
+  const b = document.createElement('b');
+  b.textContent = extras.title || label || 'Монтажна схема';
+  const s = document.createElement('small');
+  s.textContent = `${blocks.length} елемента${extras.exported ? ' · ' + extras.exported : ''}`;
+  $('title').replaceChildren(b, s);
+
+  const keys = new Map();
+  for (const x of blocks) if (!keys.has(x.stage)) keys.set(x.stage, x.stageOrder);
+  stages = [...keys].map(([key, order]) => ({ key, order, on: true })).sort((p, q) => p.order - q.order);
+  const row = $('layers');
+  row.replaceChildren(...stages.map((st) => {
+    const button = document.createElement('button');
+    button.textContent = stageName(st.key);
+    button.className = 'on';
+    button.onclick = () => { st.on = !st.on; button.classList.toggle('on', st.on); restage(); };
+    return button;
+  }));
+  row.style.display = stages.length > 1 ? 'flex' : 'none';
+
+  $('empty').style.display = 'none';
+  setLetters(lettersOn);
+  restage();
+  setStep(null);
+  fit();
+}
+
+// The order the blocks go up: by placement number; the ones without a number
+// after them, stage by stage, by name.
+function restage() {
+  const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
+  const current = step === null ? null : sequence[step];
+  sequence = blocks.filter((b) => on.has(b.stage)).sort((p, q) =>
+    (numbered(p) ? 0 : 1) - (numbered(q) ? 0 : 1) ||
+    (p.placement ?? 0) - (q.placement ?? 0) ||
+    p.stageOrder - q.stageOrder ||
+    p.name.localeCompare(q.name, 'bg', { numeric: true }));
+  $('steps').style.display = sequence.length ? 'block' : 'none';
+  $('stepRange').max = Math.max(sequence.length - 1, 0);
+  let next = null;
+  if (step !== null) {
+    next = current ? sequence.indexOf(current) : -1;
+    if (next < 0) next = Math.min(step, sequence.length - 1);
+    if (next < 0) next = null;
+  }
+  setStep(next);
+}
+
+function light(block, on) {
+  for (const m of block.bodies) m.material.emissive.setHex(on ? 0x553300 : 0x000000);
+}
+
+function setStep(index) {
+  step = index;
+  const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
+  for (const b of blocks) {
+    const at = sequence.indexOf(b);
+    b.object.visible = on.has(b.stage) && (index === null || (at >= 0 && at <= index));
+    light(b, false);
+  }
+  if (index !== null && sequence[index]) light(sequence[index], true);
+  if (selected) {
+    if (selected.object.visible) light(selected, true); else select(null);
+  }
+  $('btnAll').classList.toggle('on', index === null);
+  if (!sequence.length) return;
+  $('stepRange').value = index === null ? sequence.length - 1 : index;
+  if (index === null) {
+    $('stepWhat').textContent = `Всички видими: ${sequence.length}. „▶" добавя по един.`;
+  } else {
+    const b = sequence[index];
+    const t = document.createElement('span');
+    t.textContent = `Стъпка ${index + 1} от ${sequence.length}: `;
+    const n = document.createElement('b');
+    n.textContent = `${numbered(b) ? `№ ${b.placement} · ` : ''}${b.name}`;
+    $('stepWhat').replaceChildren(t, n);
+  }
+}
+
+function move(delta) {
+  if (!sequence.length) return;
+  const at = step === null ? (delta > 0 ? -1 : sequence.length) : step;
+  setStep(Math.min(Math.max(at + delta, 0), sequence.length - 1));
+}
+
+function play() {
+  if (playing) { clearInterval(playing); playing = null; $('btnPlay').classList.remove('on'); return; }
+  if (!sequence.length) return;
+  if (step === null || step >= sequence.length - 1) setStep(0);
+  $('btnPlay').classList.add('on');
+  playing = setInterval(() => {
+    if (step >= sequence.length - 1) { play(); return; }
+    move(1);
+  }, 1200);
+}
+
+function fit() {
+  if (!model) return;
+  const box = new THREE.Box3();
+  for (const block of blocks) if (block.object.visible) box.expandByObject(block.object);
+  if (box.isEmpty()) box.setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const centre = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(size.length() / 2, 0.5);
+  const distance = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * (camera.aspect < 1 ? 1.25 / camera.aspect : 1.05);
+  const direction = new THREE.Vector3(1, 0.8, 1.2).normalize();
+  camera.position.copy(centre).addScaledVector(direction, distance);
+  camera.near = Math.max(distance / 1000, 0.01);
+  camera.far = distance * 20;
+  camera.updateProjectionMatrix();
+  controls.target.copy(centre);
+  controls.update();
+}
+
+function setLetters(on) {
+  lettersOn = on;
+  $('btnLetters').classList.toggle('on', on);
+  for (const block of blocks) for (const m of block.letters) m.visible = on;
+}
+
+function select(block) {
+  if (selected) light(selected, false);
+  if (step !== null && sequence[step]) light(sequence[step], true);
+  selected = block;
+  if (!block) { $('info').style.display = 'none'; return; }
+  light(block, true);
+  $('info').style.display = 'flex';
+  $('infoName').textContent = block.name;
+  $('infoStage').textContent = stageName(block.stage);
+  $('infoNo').textContent = numbered(block) ? `№ ${block.placement}` : 'без №';
+  $('infoSwatch').style.background = block.colour ? `#${block.colour.getHexString()}` : '#ccc';
+}
+
+const loader = new GLTFLoader();
+
+function loadBuffer(buffer, label) {
+  busy('Подрежда…', 1);
+  loader.parse(buffer, '', (gltf) => { busy(null); show(gltf, label); },
+    (error) => { busy(null); alert(`Файлът не се отвори: ${error.message || error}`); });
+}
+
+async function loadUrl(url) {
+  busy('Зарежда…', 0);
+  try {
+    const response = await fetch(url, { cache: 'no-cache' });
+    if (!response.ok) throw new Error(response.status === 404 ? 'няма такъв модел (още ли се качва?)' : `${response.status}`);
+    const total = Number(response.headers.get('content-length')) || 0;
+    const reader = response.body.getReader();
+    const chunks = [];
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      got += value.length;
+      busy(`Зарежда… ${(got / 1048576).toFixed(1)} MB`, total ? got / total : 0);
+    }
+    const all = new Uint8Array(got);
+    let at = 0;
+    for (const c of chunks) { all.set(c, at); at += c.length; }
+    loadBuffer(all.buffer, decodeURIComponent(url.split('/').pop().replace(/\.glb$/i, '')));
+  } catch (error) {
+    busy(null);
+    $('empty').style.display = 'flex';
+    alert(`Моделът не се зареди: ${error.message || error}`);
+  }
+}
+
+function openFile(file) {
+  if (!file) return;
+  busy('Чете файла…', 0.5);
+  file.arrayBuffer().then((buffer) => loadBuffer(buffer, file.name.replace(/\.glb$/i, '')));
+}
+
+// A tap (not a drag) picks a block.
+const ray = new THREE.Raycaster();
+let down = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || !model) { down = null; return; }
+  down = null;
+  const p = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  ray.setFromCamera(p, camera);
+  const meshes = blocks.filter((b) => b.object.visible).flatMap((b) => b.bodies.concat(b.letters.filter((m) => m.visible)));
+  const hit = ray.intersectObjects(meshes, false)[0];
+  select(hit ? blockOf(hit.object) : null);
+});
+
+// Full screen where the phone allows it (Android does; an iPhone's Safari does
+// not for a page — there the button stays hidden).
+if (document.documentElement.requestFullscreen) {
+  $('btnFull').hidden = false;
+  $('btnFull').onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+}
+$('btnOpen').onclick = () => $('file').click();
+$('btnOpenBig').onclick = () => $('file').click();
+$('file').onchange = (e) => openFile(e.target.files[0]);
+$('btnFit').onclick = fit;
+$('btnLetters').onclick = () => setLetters(!lettersOn);
+$('btnPrev').onclick = () => move(-1);
+$('btnNext').onclick = () => move(1);
+$('btnPlay').onclick = play;
+$('btnAll').onclick = () => setStep(null);
+$('stepRange').oninput = (e) => setStep(Number(e.target.value));
+
+for (const name of ['dragenter', 'dragover']) {
+  window.addEventListener(name, (e) => { e.preventDefault(); $('empty').classList.add('drag'); });
+}
+window.addEventListener('dragleave', () => $('empty').classList.remove('drag'));
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  $('empty').classList.remove('drag');
+  openFile(e.dataTransfer.files[0]);
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+
+// ?m=house opens models/house.glb straight from the link.
+const wanted = new URLSearchParams(location.search).get('m');
+if (wanted) {
+  $('empty').style.display = 'none';
+  loadUrl(/^https?:/i.test(wanted) || wanted.includes('/') ? wanted : `models/${encodeURIComponent(wanted)}.glb`);
+}
+</script>
+</body>
+</html>
