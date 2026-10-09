@@ -69,7 +69,7 @@
   #levelButtons { display: none; justify-content: space-around; gap: 2px; margin-bottom: 4px; }
   #grip { width: 16px; align-self: stretch; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   #grip::before { content: ''; width: 4px; height: 34px; border-radius: 2px; background: #9aa6b2; }
-  #levelButtons button { padding: 4px 6px; min-width: 52px; min-height: 50px; border: 0; border-radius: 14px;
+  #levelButtons button { padding: 3px 5px; min-width: 46px; min-height: 42px; border: 0; border-radius: 12px;
     background: transparent; box-shadow: inset 0 0 0 2px #d5dbe1; transition: background .15s, box-shadow .15s, transform .1s; }
   /* Every house framed like the lit one, in light grey — they read as buttons,
      not as a picture (his 2026-10-10: „направи не селектираните бутончета да
@@ -840,8 +840,8 @@ function houseIcon(list, lit) {
     const roofLine = `M${left},${eaves + radius} Q${left},${eaves} ${l[0]},${l[1]} ${ridge} Q${right},${eaves} ${right},${eaves + radius}`;
     shapes.push(`<path d="${roofLine}" fill="none" stroke="${green}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
   }
-  // A quarter bigger than in the drawer: the row over the slider has room.
-  return `<svg viewBox="0 0 ${width} ${total}" width="${Math.round(width * 1.25)}" height="${Math.round(total * 1.25)}" aria-hidden="true">${defs}${shapes.join('')}</svg>`;
+  // Smaller again (his 2026-10-10: „направи ги по-малки тези бутони").
+  return `<svg viewBox="0 0 ${width} ${total}" width="${Math.round(width * 0.85)}" height="${Math.round(total * 0.85)}" aria-hidden="true">${defs}${shapes.join('')}</svg>`;
 }
 
 // The order the blocks go up: by placement number; the ones without a number
@@ -1386,7 +1386,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'f4137da1cfbb';
+const PAGE_VERSION = '8ef60c545a89';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
