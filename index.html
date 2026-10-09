@@ -63,14 +63,17 @@
     background: rgba(255,255,255,.72); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     box-shadow: 0 6px 22px rgba(20,30,45,.16); transition: transform .25s ease; touch-action: none; }
   #levels.tucked { transform: translateX(calc(100% - 16px)); }
-  #levelButtons { display: flex; flex-direction: column-reverse; gap: 2px; }
+  /* The houses in a row over the slider, storey 1 on the left (his
+     2026-10-10: „да пробваме да наредим бутоните хоризонтално над
+     слайдера"; a try — the drawer on the right stays in the code, hidden). */
+  #levelButtons { display: none; justify-content: space-around; gap: 2px; margin-bottom: 4px; }
   #grip { width: 16px; align-self: stretch; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   #grip::before { content: ''; width: 4px; height: 34px; border-radius: 2px; background: #9aa6b2; }
-  #levels button { padding: 4px 6px; min-width: 52px; min-height: 50px; border: 0; border-radius: 14px;
+  #levelButtons button { padding: 4px 6px; min-width: 52px; min-height: 50px; border: 0; border-radius: 14px;
     background: transparent; box-shadow: none; transition: background .15s, transform .1s; }
-  #levels button:active { transform: scale(.95); }
-  #levels button.on { background: #e6f8ee; box-shadow: inset 0 0 0 2px #10b981; color: var(--ink); }
-  #levels svg { display: block; margin: 0 auto; filter: drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
+  #levelButtons button:active { transform: scale(.95); }
+  #levelButtons button.on { background: #e6f8ee; box-shadow: inset 0 0 0 2px #10b981; color: var(--ink); }
+  #levelButtons svg { display: block; margin: 0 auto; filter: drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
   .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .bottom > * { pointer-events: auto; }
@@ -127,11 +130,12 @@
   </div>
 </div>
 
-<div id="levels"><div id="grip" aria-label="Скрий / покажи етажите"></div><div id="levelButtons"></div></div>
+<div id="levels"><div id="grip" aria-label="Скрий / покажи етажите"></div></div>
 
 <div class="bottom">
   <div class="card" id="steps">
     <div class="what" id="stepWhat"></div>
+    <div id="levelButtons"></div>
     <input type="range" id="stepRange" min="0" max="0" value="0" aria-label="Стъпка на монтажа">
     <div class="row">
       <button id="btnPrev" aria-label="Назад">◀</button>
@@ -666,7 +670,7 @@ function show(gltf, label) {
     button.onclick = () => jumpTo(shown === levelEnd(i) ? i - 1 : i);
     return button;
   }));
-  $('levels').style.display = levels.length > 1 ? 'flex' : 'none';
+  $('levelButtons').style.display = levels.length > 1 ? 'flex' : 'none';
 
   $('empty').style.display = 'none';
   setLetters(lettersOn);
@@ -892,7 +896,9 @@ function setStep(count, stepped = false) {
   } else {
     const b = sequence[shown - 1];
     const t = document.createElement('span');
-    t.textContent = `Стъпка ${shown} от ${sequence.length}: `;
+    // „Панел 25 от 55", over the houses (his 2026-10-10: „нека пише ,, панел
+    // 25 от55 ,, а не стъпка. И този надпис го направи над бутоните").
+    t.textContent = `Панел ${shown} от ${sequence.length}: `;
     const n = document.createElement('b');
     n.textContent = `${numbered(b) ? `№ ${b.placement} · ` : ''}${b.name}`;
     $('stepWhat').replaceChildren(t, n);
@@ -926,7 +932,7 @@ function fitPlan(box) {
   const bottom = document.querySelector('.bottom').getBoundingClientRect().top - 8;
   const drawer = $('levels');
   const left = 8;
-  const right = (drawer.style.display === 'none' ? w : Math.min(drawer.getBoundingClientRect().left, w)) - 8;
+  const right = (getComputedStyle(drawer).display === 'none' ? w : Math.min(drawer.getBoundingClientRect().left, w)) - 8;
   const across = Math.abs(size.dot(planControls.screenRight));
   const upward = Math.abs(size.dot(planControls.screenUp));
   const perPixel = Math.max(across / Math.max(right - left, 50), upward / Math.max(bottom - top, 50), 0.001) * 1.1;
@@ -1298,6 +1304,39 @@ renderer.setAnimationLoop((now) => {
   draw(true);
   shaded = true;
 });
+
+// The page over the whole screen — no address bar, no reload button (his
+// 2026-10-10: „ако можеш да я направиш да е на цяла страница а не отдолу да
+// пише адрес и релоуд"). A browser lets a page go full screen only on a
+// touch, so a touch lifted does it — the first one, and the next one after
+// the phone has left full screen. Android does it; an iPhone's Safari does
+// not for a page; on a computer nothing changes.
+document.addEventListener('pointerup', (e) => {
+  const page = document.documentElement;
+  if (e.pointerType !== 'touch' || document.fullscreenElement || !page.requestFullscreen) return;
+  page.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+}, true);
+
+// A newer page on the server: the phone keeps the old one up to 10 minutes
+// for an old link. Looked up once at opening; when there is a newer one, the
+// page opens it at once, once per version (his 2026-10-10 „да" to the
+// question whether the page should check for a new version by itself).
+// `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
+// source here keeps the placeholder and checks nothing.
+const PAGE_VERSION = '2e385b1d6aa6';
+(async () => {
+  if (PAGE_VERSION.startsWith('__')) return;
+  try {
+    const response = await fetch(`${location.pathname}?check=${Date.now()}`, { cache: 'no-store' });
+    const there = /const PAGE_VERSION = '([0-9a-f]+)'/.exec(await response.text());
+    if (!there || there[1] === PAGE_VERSION) return;
+    if (sessionStorage.getItem('mn-page-version') === there[1]) return;
+    sessionStorage.setItem('mn-page-version', there[1]);
+    const next = new URL(location.href);
+    next.searchParams.set('v', there[1]);
+    location.replace(next.toString());
+  } catch (error) { /* offline or no storage: the page as it is */ }
+})();
 
 // ?m=house opens models/house.glb straight from the link — only a name from
 // this page's own models/, never another site.
