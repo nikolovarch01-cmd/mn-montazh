@@ -1032,6 +1032,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   // empty screen does — and a panel behind it is not reached through it (his
   // 2026-10-09: „фундамента да не може да се селектира").
   const block = hit ? blockOf(hit.object) : null;
+  quench();
   select(block && block.stage !== 'B' ? block : null);
 });
 
@@ -1049,7 +1050,13 @@ $('stepRange').oninput = (e) => setStep(Number(e.target.value), true);
 // away and lets the panel go (his 2026-10-09: „когато селектираш панел и се
 // появи инфо за него който и бутон да цъкнеш да скрива информацията").
 document.addEventListener('click', (e) => {
-  if (selected && e.target.closest && e.target.closest('button')) select(null);
+  if (!e.target.closest || !e.target.closest('button')) return;
+  if (selected) select(null);
+  // Any button but ◀ ▶ puts the newest panel's green out; ◀ ▶ light it again
+  // on the last one standing (his 2026-10-09: „ако цъкнеш някъде в страни или
+  // друг бутон или избереш панел да изгасва. Ако пак цъкнеш стрелка или
+  // слайдер пак да се появявя зеленкото на последния панел").
+  if (!e.target.closest('#btnPrev, #btnNext')) quench();
 }, true);
 $('stepRange').addEventListener('input', () => { if (selected) select(null); });
 
@@ -1192,6 +1199,17 @@ function halo() {
   if (!outline) return;
   outline.selectedObjects = newest && newest !== selected ? newest.bodies : [];
   outlinePicked.selectedObjects = selected ? selected.bodies : [];
+}
+
+// The newest panel's green goes out — a tap anywhere on the model or the
+// empty screen, a choice, any other button. ◀ ▶ and the slider light it again.
+function quench() {
+  if (!newest) return;
+  const was = newest;
+  newest = null;
+  changed();
+  look(was);
+  halo();
 }
 
 // 2D on and off. Each view keeps where it was; the levels and the step stay
