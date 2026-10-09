@@ -956,19 +956,19 @@ function setStep(count, stepped = false) {
   halo();
   markLevels();
   $('stepRange').value = shown;
-  if (shown === sequence.length && shown > 0) {
-    $('stepWhat').textContent = `Видими: ${sequence.length}. „◀" маха, „▶" добавя по един.`;
-  } else if (shown === 0) {
-    $('stepWhat').textContent = `0 от ${sequence.length}. „▶" добавя по един.`;
+  // The last panel standing: its name, its placement number, and where it
+  // stands in the order — „EW2 01 · № 25 · 25/55" (his 2026-10-10: „направи
+  // текста първо да пише името на панела после номера на сглобяване и накрая
+  // само 22/55"; before, „Панел 25 от 55" over the houses).
+  if (shown === 0) {
+    $('stepWhat').textContent = `0/${sequence.length} · „▶" добавя по един.`;
   } else {
     const b = sequence[shown - 1];
-    const t = document.createElement('span');
-    // „Панел 25 от 55", over the houses (his 2026-10-10: „нека пише ,, панел
-    // 25 от55 ,, а не стъпка. И този надпис го направи над бутоните").
-    t.textContent = `Панел ${shown} от ${sequence.length}: `;
-    const n = document.createElement('b');
-    n.textContent = `${numbered(b) ? `№ ${b.placement} · ` : ''}${b.name}`;
-    $('stepWhat').replaceChildren(t, n);
+    const name = document.createElement('b');
+    name.textContent = b.name;
+    const rest = document.createElement('span');
+    rest.textContent = `${numbered(b) ? ` · № ${b.placement}` : ''} · ${shown}/${sequence.length}`;
+    $('stepWhat').replaceChildren(name, rest);
   }
 }
 
@@ -1390,7 +1390,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = '66f7af69a72d';
+const PAGE_VERSION = 'c8e8457dccbb';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
