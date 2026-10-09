@@ -49,11 +49,20 @@
   .title small { color: var(--muted); }
   /* The levels, one above the other, storey 1 at the bottom; each a little
      house lit green as far up as it shows (his 2026-10-09). */
-  #levels { position: fixed; left: 16px; bottom: calc(150px + env(safe-area-inset-bottom)); display: none;
-    flex-direction: column-reverse; gap: 4px; z-index: 2; padding: 6px; border-radius: 22px;
-    background: rgba(255,255,255,.78); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-    box-shadow: 0 8px 28px rgba(20,30,45,.18), inset 0 0 0 1px rgba(255,255,255,.6); }
-  #levels button { padding: 6px 8px; min-width: 60px; min-height: 58px; border: 0; border-radius: 16px;
+  /* A drawer against the left edge, high up, where nothing comes and goes;
+     swiped left it tucks away to its grip, swiped right (or the grip tapped)
+     it comes back (his 2026-10-09: „по дефолт позиционирани по-нагоре …
+     по-дискретни — забий ги малко в лявата страна … може да се прибират с
+     плъзгане"). */
+  #levels { position: fixed; left: 0; top: calc(84px + env(safe-area-inset-top)); display: none; z-index: 2;
+    align-items: center; padding: 5px 0 5px 3px; border-radius: 0 20px 20px 0;
+    background: rgba(255,255,255,.72); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    box-shadow: 0 6px 22px rgba(20,30,45,.16); transition: transform .25s ease; touch-action: none; }
+  #levels.tucked { transform: translateX(calc(-100% + 16px)); }
+  #levelButtons { display: flex; flex-direction: column-reverse; gap: 2px; }
+  #grip { width: 16px; align-self: stretch; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  #grip::before { content: ''; width: 4px; height: 34px; border-radius: 2px; background: #9aa6b2; }
+  #levels button { padding: 4px 6px; min-width: 52px; min-height: 50px; border: 0; border-radius: 14px;
     background: transparent; box-shadow: none; transition: background .15s, transform .1s; }
   #levels button:active { transform: scale(.95); }
   #levels button.on { background: #e6f8ee; box-shadow: inset 0 0 0 2px #10b981; color: var(--ink); }
@@ -108,7 +117,7 @@
   </div>
 </div>
 
-<div id="levels"></div>
+<div id="levels"><div id="levelButtons"></div><div id="grip" aria-label="Скрий / покажи етажите"></div></div>
 
 <div class="bottom">
   <div class="card" id="info">
@@ -145,6 +154,10 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -373,7 +386,7 @@ function show(gltf, label) {
   stages = [...keys].map(([key, order]) => ({ key, order, on: true })).sort((p, q) => p.order - q.order);
   levels = stages.filter((st) => st.key !== 'B');
   upTo = levels.length - 1;
-  const column = $('levels');
+  const column = $('levelButtons');
   column.replaceChildren(...levels.map((st, i) => {
     const button = document.createElement('button');
     button.innerHTML = houseIcon(levels, i);
@@ -385,7 +398,7 @@ function show(gltf, label) {
     button.onclick = () => showUpTo(i === upTo ? i - 1 : i);
     return button;
   }));
-  column.style.display = levels.length > 1 ? 'flex' : 'none';
+  $('levels').style.display = levels.length > 1 ? 'flex' : 'none';
   markLevels();
 
   $('empty').style.display = 'none';
@@ -406,17 +419,38 @@ function showUpTo(i) {
   restage(i < 0 ? 0 : null);
 }
 
-// The column stands over the cards at the bottom, however high they are —
-// the name card of a picked block comes and goes (his 2026-10-09: „измести
-// бутоните малко нагоре защото се бият с наименованието на модула").
-function placeLevels() {
-  const cards = document.querySelector('.bottom');
-  $('levels').style.bottom = `${Math.round(cards.getBoundingClientRect().height) + 8}px`;
-}
+// The drawer stays where it is; nothing at the bottom moves it any more.
+function placeLevels() {}
 
 function markLevels() {
-  [...$('levels').children].forEach((button, i) => button.classList.toggle('on', i === upTo));
+  [...$('levelButtons').children].forEach((button, i) => button.classList.toggle('on', i === upTo));
 }
+
+// Swipe the drawer left to tuck it away, right (or tap the grip) to bring it
+// back; a swipe is no press of the button it started on. Remembered on this
+// phone.
+(() => {
+  const drawer = $('levels');
+  let from = null;
+  let swiped = false;
+  const tuck = (on) => {
+    drawer.classList.toggle('tucked', on);
+    try { localStorage.setItem('mn-levels-tucked', on ? '1' : '0'); } catch (e) { /* no storage */ }
+  };
+  try { if (localStorage.getItem('mn-levels-tucked') === '1') drawer.classList.add('tucked'); } catch (e) { /* no storage */ }
+  drawer.addEventListener('pointerdown', (e) => { from = e.clientX; swiped = false; });
+  drawer.addEventListener('pointermove', (e) => {
+    if (from === null) return;
+    const dx = e.clientX - from;
+    if (dx < -28 && !drawer.classList.contains('tucked')) { tuck(true); swiped = true; from = null; }
+    if (dx > 28 && drawer.classList.contains('tucked')) { tuck(false); swiped = true; from = null; }
+  });
+  drawer.addEventListener('pointerup', () => { from = null; });
+  drawer.addEventListener('click', (e) => {
+    if (swiped) { e.stopPropagation(); e.preventDefault(); swiped = false; }
+  }, true);
+  $('grip').addEventListener('click', () => tuck(!drawer.classList.contains('tucked')));
+})();
 
 // The little house of a level button: one band a storey (with its windows),
 // a thin slab a floor, a gable with a chimney the roof, bottom up; green as
@@ -492,6 +526,7 @@ function light(block, on) {
 // count: how many of the sequence stand (0 … all); the last one put up is lit
 // while stepping.
 function setStep(count) {
+  changed();
   shown = Math.min(Math.max(count, 0), sequence.length);
   step = shown < sequence.length ? shown - 1 : null;
   for (const b of blocks) {
@@ -541,12 +576,14 @@ function fit() {
 }
 
 function setLetters(on) {
+  changed();
   lettersOn = on;
   $('btnLetters').classList.toggle('on', on);
   for (const block of blocks) for (const m of block.letters) m.visible = on;
 }
 
 function select(block) {
+  changed();
   if (selected) light(selected, false);
   if (step !== null && sequence[step]) light(sequence[step], true);
   selected = block;
@@ -677,7 +714,53 @@ if (inApp) {
   if (android && !tried) toBrowser();
 }
 
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+// Shade in the corners (ambient occlusion) — only when the model stands still:
+// while it turns the picture is drawn plain and quick, a quarter of a second
+// after it stops it is drawn once with the shading and then left alone. A
+// phone that takes too long for it (over 400 ms) is spared it for the rest of
+// the visit. His 2026-10-09: „сложи нещо като амбиент оклужан … ако не е тежко
+// за 3-4 годишни андроид телефони". ORIGIN unasked — the way and the numbers.
+let composer = null;
+let occlusion = true;
+try {
+  composer = new EffectComposer(renderer);
+  composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  composer.setSize(window.innerWidth, window.innerHeight);
+  composer.addPass(new RenderPass(scene, camera));
+  const gtao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+  gtao.blendIntensity = 0.9;
+  gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12 });
+  composer.addPass(gtao);
+  composer.addPass(new OutputPass());
+} catch (error) {
+  composer = null;
+}
+window.addEventListener('resize', () => { if (composer) composer.setSize(window.innerWidth, window.innerHeight); });
+
+let version = 0;           // anything on the page that changes the picture
+const lastCamera = new THREE.Matrix4();
+let lastVersion = -1;
+let stillSince = performance.now();
+let shaded = false;
+function changed() { version += 1; }
+renderer.setAnimationLoop(() => {
+  controls.update();
+  camera.updateMatrixWorld();
+  const moving = controls.pointers.size > 0 || !lastCamera.equals(camera.matrixWorld) || version !== lastVersion;
+  if (moving) {
+    lastCamera.copy(camera.matrixWorld);
+    lastVersion = version;
+    stillSince = performance.now();
+    shaded = false;
+    renderer.render(scene, camera);
+    return;
+  }
+  if (shaded || !composer || !occlusion || performance.now() - stillSince < 250) return;
+  const started = performance.now();
+  composer.render();
+  if (performance.now() - started > 400) occlusion = false;
+  shaded = true;
+});
 
 // ?m=house opens models/house.glb straight from the link — only a name from
 // this page's own models/, never another site.
