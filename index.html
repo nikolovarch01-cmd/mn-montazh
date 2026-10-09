@@ -774,7 +774,10 @@ function houseIcon(list, lit) {
   const bottom = total - 1.5;
   let y = bottom;
   let eaves = null;
-  const frame = '#263238';
+  // Dark grey, not black, its corners slightly rounded (his 2026-10-10: „да
+  // стилизираме сега. Черната рамка да е по-тъмно сиво не черно и да има
+  // леки [заоблености] по ъглите").
+  const frame = '#4b5563';
   const green = '#10b981';
   const defs = `<defs>
     <linearGradient id="${id}g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${total}"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient>
@@ -802,10 +805,10 @@ function houseIcon(list, lit) {
   const rim = eaves === null
     ? `M${left},${bottom} V${y} H${right} V${bottom}`
     : `M${left},${bottom} V${eaves} L${mid},${y} L${right},${eaves} V${bottom}`;
-  shapes.push(`<path d="M${left},${bottom} H${right}" fill="none" stroke="${frame}" stroke-width="1.4"/>`);
-  shapes.push(`<path d="${rim}" fill="none" stroke="${frame}" stroke-width="3" stroke-linejoin="miter"/>`);
+  shapes.push(`<path d="M${left},${bottom} H${right}" fill="none" stroke="${frame}" stroke-width="1.4" stroke-linecap="round"/>`);
+  shapes.push(`<path d="${rim}" fill="none" stroke="${frame}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
   if (eaves !== null && roofAt === lit) {
-    shapes.push(`<path d="M${left},${eaves} L${mid},${y} L${right},${eaves}" fill="none" stroke="${green}" stroke-width="3" stroke-linejoin="miter"/>`);
+    shapes.push(`<path d="M${left},${eaves} L${mid},${y} L${right},${eaves}" fill="none" stroke="${green}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`);
   }
   // A quarter bigger than in the drawer: the row over the slider has room.
   return `<svg viewBox="0 0 ${width} ${total}" width="${Math.round(width * 1.25)}" height="${Math.round(total * 1.25)}" aria-hidden="true">${defs}${shapes.join('')}</svg>`;
@@ -1353,7 +1356,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'b0be02c73e77';
+const PAGE_VERSION = '418fc99646a1';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
