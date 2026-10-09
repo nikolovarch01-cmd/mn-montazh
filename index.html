@@ -817,8 +817,12 @@ const WARM = 0x553300;
 // последния поставен панел в някакво зеленичко да свети ама можеш ли да го
 // направиш като да грее … с намалящ градиент"). ORIGIN unasked — the
 // greens, the halo's size.
-const NEWEST = new THREE.Color(0x8fe3a0);
-const NEWEST_GLOW = 0x0c5a24;
+// `&green=less` in the link: the same, a little softer — to compare on his
+// phone (his „много леко намали зеленото да видим как ще е. Така е
+// страхотно. Просто искам да видя"); goes when he has chosen.
+const SOFT_GREEN = new URLSearchParams(location.search).get('green') === 'less';
+const NEWEST = new THREE.Color(SOFT_GREEN ? 0xa4dcae : 0x8fe3a0);
+const NEWEST_GLOW = SOFT_GREEN ? 0x08401a : 0x0c5a24;
 
 // In 2D the stages under the one being put up now go pale: putting up the
 // floor, storey 1 fades; putting up storey 2, the floor too (his 2026-10-09:
@@ -1143,17 +1147,17 @@ try {
   // A wide soft halo, fading outwards (his „с намалящ градиент"): green
   // round the newest panel, blue round the chosen one (his „и селектирания го
   // направи така да става").
-  const ring = (near, far) => {
+  const ring = (near, far, strength = 3, glow = 2) => {
     const pass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera, []);
     pass.visibleEdgeColor.set(near);
     pass.hiddenEdgeColor.set(far);
-    pass.edgeStrength = 3;
-    pass.edgeGlow = 2;
+    pass.edgeStrength = strength;
+    pass.edgeGlow = glow;
     pass.edgeThickness = 4;
     composer.addPass(pass);
     return pass;
   };
-  outline = ring(0x3dff7a, 0x1a7a3a);
+  outline = SOFT_GREEN ? ring(0x3dff7a, 0x1a7a3a, 2.2, 1.5) : ring(0x3dff7a, 0x1a7a3a);
   outlinePicked = ring(0x4d8dff, 0x1a3a8a);
   composer.addPass(new OutputPass());
 } catch (error) {
