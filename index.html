@@ -73,12 +73,16 @@
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .bottom > * { pointer-events: auto; }
   .card { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 14px; }
-  #info { display: none; align-items: center; gap: 10px; }
-  #info .swatch { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(0,0,0,.2); flex: none; }
-  #info .name { min-width: 0; }
-  #info b { font-size: 18px; display: block; }
-  #info small { color: var(--muted); }
-  #info .no { margin-left: auto; font-size: 22px; font-weight: 700; white-space: nowrap; }
+  /* The chosen panel's card: up, left of the two buttons, where the removed
+     ones stood, as high as they are (his 2026-10-09: „направи информацията
+     за селектирания панел да излиза горе на мястото където бяха бутоните
+     които махнахме и я направи малко по компактна"). */
+  #info { display: none; flex: 1; min-width: 0; align-self: stretch; align-items: center; gap: 8px; padding: 4px 10px; }
+  #info .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.2); flex: none; }
+  #info .name { min-width: 0; line-height: 1.15; }
+  #info b { font-size: 16px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #info small { color: var(--muted); font-size: 12px; }
+  #info .no { margin-left: auto; font-size: 18px; font-weight: 700; white-space: nowrap; }
   #steps { display: none; }
   #steps input[type=range] { display: block; width: 100%; height: 40px; margin: 0; accent-color: var(--accent); touch-action: manipulation; }
   #steps .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -111,6 +115,11 @@
 
 <div class="top">
   <div class="bar">
+    <div class="card" id="info">
+      <span class="swatch" id="infoSwatch"></span>
+      <span class="name"><b id="infoName"></b><small id="infoStage"></small></span>
+      <span class="no" id="infoNo"></span>
+    </div>
     <button id="btnFit" title="Начален изглед" aria-label="Начален изглед">⌂</button>
     <button id="btn2d" title="2D — етажите отгоре" aria-label="2D изглед отгоре">2D</button>
   </div>
@@ -119,11 +128,6 @@
 <div id="levels"><div id="levelButtons"></div><div id="grip" aria-label="Скрий / покажи етажите"></div></div>
 
 <div class="bottom">
-  <div class="card" id="info">
-    <span class="swatch" id="infoSwatch"></span>
-    <span class="name"><b id="infoName"></b><small id="infoStage"></small></span>
-    <span class="no" id="infoNo"></span>
-  </div>
   <div class="card" id="steps">
     <div class="what" id="stepWhat"></div>
     <input type="range" id="stepRange" min="0" max="0" value="0" aria-label="Стъпка на монтажа">
