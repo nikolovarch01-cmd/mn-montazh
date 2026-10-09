@@ -676,6 +676,11 @@ function show(gltf, label) {
         block.bodies.push(o);
         block.colour = o.material.color.clone();
         o.userData.base = o.material.color.clone();
+        // The faces a hair further back than their edge lines, so a line on a
+        // face's edge is never hidden by that face.
+        o.material.polygonOffset = true;
+        o.material.polygonOffsetFactor = 1;
+        o.material.polygonOffsetUnits = 1;
       }
     });
     foldLines(block);
@@ -942,7 +947,11 @@ const PAPER = new THREE.Color(0xeef1f4);
 const paleEdges = new THREE.LineBasicMaterial({ color: 0x1f2a36, transparent: true, opacity: 0.15 });
 // In 2D the outline of what stands is black (his 2026-10-10: „в две дто
 // направи контура на модулите черен"); the pale ones keep their pale lines.
-const planEdges = new THREE.LineBasicMaterial({ color: 0x000000 });
+// Drawn with the see-through things, after every face: a line lying on a
+// face's edge seen straight from above was painted over by that face when
+// drawn before it — the black lines were gone (his „контурите в 2D-то
+// трябваше да са черни а хич ги няма вече").
+const planEdges = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 1 });
 function pale(block) {
   if (!flat) return false;
   if (block.stage === 'B') return true;
@@ -1558,7 +1567,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'd5f30523e440';
+const PAGE_VERSION = 'b9a4e4a356df';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
