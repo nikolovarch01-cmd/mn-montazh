@@ -42,7 +42,11 @@
   .top { position: fixed; top: 0; left: 0; right: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 0;
     display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .top > * { pointer-events: auto; }
-  .bar { display: flex; gap: 8px; align-items: center; }
+  .bar { display: flex; gap: 6px; align-items: center; }
+  /* Five buttons up there since 2D: a little narrower, so the model's name
+     keeps its room on a phone. */
+  .bar button { min-width: 44px; padding: 0 10px; }
+  #btn2d { font-weight: 700; font-size: 16px; }
   .title { flex: 1; min-width: 0; background: rgba(255,255,255,.9); border-radius: 12px; padding: 6px 12px;
     box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .title b { display: block; overflow: hidden; text-overflow: ellipsis; }
@@ -112,6 +116,7 @@
     <div class="title" id="title"><b>Монтажна схема</b><small>няма отворен модел</small></div>
     <button id="btnLetters" class="on" title="Надписите" aria-label="Надписи">Aa</button>
     <button id="btnFit" title="Начален изглед" aria-label="Начален изглед">⌂</button>
+    <button id="btn2d" title="2D — етажите отгоре" aria-label="2D изглед отгоре">2D</button>
     <button id="btnFull" title="Цял екран" aria-label="Цял екран" hidden>⛶</button>
     <button id="btnOpen" title="Отвори файл" aria-label="Отвори файл">📂</button>
   </div>
@@ -195,13 +200,18 @@ class TurnControls {
     this.theta = 0;      // round the vertical
     this.phi = 0.4;      // up and over, no limit
     this.radius = 10;
+    this.enabled = true;   // off while the 2D view has the fingers
     this.pointers = new Map();
     this.pinch = null;
     element.addEventListener('pointerdown', (e) => this.down(e));
     element.addEventListener('pointermove', (e) => this.move(e));
     element.addEventListener('pointerup', (e) => this.up(e));
     element.addEventListener('pointercancel', (e) => this.up(e));
-    element.addEventListener('wheel', (e) => { e.preventDefault(); this.zoomAt(Math.exp(e.deltaY * 0.001), e.clientX, e.clientY); }, { passive: false });
+    element.addEventListener('wheel', (e) => {
+      if (!this.enabled) return;
+      e.preventDefault();
+      this.zoomAt(Math.exp(e.deltaY * 0.001), e.clientX, e.clientY);
+    }, { passive: false });
     this.pick = null;   // (x, y) => the model's point under the screen point, or null
     element.addEventListener('contextmenu', (e) => e.preventDefault());
   }
@@ -212,6 +222,7 @@ class TurnControls {
     this.theta = Math.atan2(d.x, d.z);
   }
   down(e) {
+    if (!this.enabled) return;
     this.element.setPointerCapture(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button });
     this.pinch = null;
@@ -299,6 +310,101 @@ controls.pick = (x, y) => {
   const hit = caster.intersectObjects(blocks.filter((b) => b.object.visible).flatMap((b) => b.bodies), false)[0];
   return hit ? hit.point : null;
 };
+
+// The 2D view: the floors from straight above, flat (no perspective), the way
+// SketchUp's top view lies — its red axis to the right, its green one up the
+// screen. One finger (or the mouse) moves the plan; two fingers pinch and
+// move; the wheel zooms where it points; it never turns. The levels and the
+// steps are the same as in 3D — only the view changes. His 2026-10-09:
+// „направи и бутон 2д който вклучва 2д изгледи на етажите и кое след кое се
+// реди пак със стрелки и слайдер и зум и местене". ORIGIN unasked — the plan
+// from above and its sides, the button's place.
+class PlanControls {
+  constructor(camera, element) {
+    this.camera = camera;
+    this.element = element;
+    this.target = new THREE.Vector3();
+    this.half = 10;       // half the height of the screen, in metres
+    this.height = 100;    // where the camera hangs
+    this.enabled = false;
+    this.pointers = new Map();
+    this.pinch = null;
+    element.addEventListener('pointerdown', (e) => this.down(e));
+    element.addEventListener('pointermove', (e) => this.move(e));
+    element.addEventListener('pointerup', (e) => this.up(e));
+    element.addEventListener('pointercancel', (e) => this.up(e));
+    element.addEventListener('wheel', (e) => {
+      if (!this.enabled) return;
+      e.preventDefault();
+      this.zoomAt(Math.exp(e.deltaY * 0.001), e.clientX, e.clientY);
+    }, { passive: false });
+  }
+  down(e) {
+    if (!this.enabled) return;
+    this.element.setPointerCapture(e.pointerId);
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    this.pinch = null;
+  }
+  up(e) {
+    this.pointers.delete(e.pointerId);
+    this.pinch = null;
+  }
+  move(e) {
+    const p = this.pointers.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    if (this.pointers.size === 1) {
+      this.pan(dx, dy);
+    } else if (this.pointers.size === 2) {
+      const [a, b] = [...this.pointers.values()];
+      const span = Math.hypot(a.x - b.x, a.y - b.y);
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (this.pinch && span > 0) {
+        this.zoomAt(this.pinch.span / span, mid.x, mid.y);
+        this.pan(mid.x - this.pinch.mid.x, mid.y - this.pinch.mid.y);
+      }
+      this.pinch = { span, mid };
+    }
+  }
+  // The plan follows the finger: right is +x, up the screen is -z.
+  pan(dx, dy) {
+    const scale = (2 * this.half) / Math.max(this.element.clientHeight, 1);
+    this.target.x -= dx * scale;
+    this.target.z -= dy * scale;
+  }
+  // The point of the plan under (x, y) stays under it.
+  zoomAt(factor, x, y) {
+    const next = THREE.MathUtils.clamp(this.half * factor, 0.2, 5000);
+    const f = next / this.half;
+    const rect = this.element.getBoundingClientRect();
+    const nx = ((x - rect.left) / rect.width) * 2 - 1;
+    const ny = -((y - rect.top) / rect.height) * 2 + 1;
+    const px = this.target.x + nx * this.half * (rect.width / Math.max(rect.height, 1));
+    const pz = this.target.z - ny * this.half;
+    this.target.x = px + (this.target.x - px) * f;
+    this.target.z = pz + (this.target.z - pz) * f;
+    this.half = next;
+  }
+  update() {
+    const c = this.camera;
+    const aspect = this.element.clientWidth / Math.max(this.element.clientHeight, 1);
+    c.left = -this.half * aspect;
+    c.right = this.half * aspect;
+    c.top = this.half;
+    c.bottom = -this.half;
+    c.position.set(this.target.x, this.height, this.target.z);
+    c.up.set(0, 0, -1);
+    c.lookAt(this.target.x, this.height - 1, this.target.z);
+    c.updateProjectionMatrix();
+  }
+}
+const planCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.05, 1000);
+const planControls = new PlanControls(planCamera, renderer.domElement);
+let flat = false;         // the 2D view is on
+let view = camera;        // the camera the picture is drawn with
 
 // The stages of the assembly, as the plugin writes them (S1 storey 1 with the
 // stair, F the floor, S2 storey 2, R the roof).
@@ -403,8 +509,12 @@ function show(gltf, label) {
 
   $('empty').style.display = 'none';
   setLetters(lettersOn);
-  restage();
-  fit();
+  // A model opens at step 0 — the bare foundation, „▶" puts up the first
+  // panel — and the view takes in the whole house (his 2026-10-09: „направи
+  // програмката да стартира от позиция 0 на реденето на панелите а не от
+  // наредени панели").
+  restage(0);
+  fit(true);
 }
 
 // A level shows itself and everything under it, and hides what is above —
@@ -557,11 +667,43 @@ function move(delta) {
   setStep(shown + delta);
 }
 
-function fit() {
+// The view takes in what the levels that are on will hold when every step
+// stands (and the foundation) — not only what stands now, so it does not jump
+// at step 0. both: the 3D and the 2D view together (a model just opened).
+function fit(both = false) {
   if (!model) return;
   const box = new THREE.Box3();
-  for (const block of blocks) if (block.object.visible) box.expandByObject(block.object);
+  for (const block of blocks) if (block.stage === 'B' || sequence.includes(block)) box.expandByObject(block.object);
   if (box.isEmpty()) box.setFromObject(model);
+  if (both || flat) fitPlan(box);
+  if (both || !flat) fitTurn(box);
+}
+
+// The plan in the free part of the screen: under the buttons at the top,
+// over the steps at the bottom, right of the levels.
+function fitPlan(box) {
+  const size = box.getSize(new THREE.Vector3());
+  const centre = box.getCenter(new THREE.Vector3());
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const top = document.querySelector('.top').getBoundingClientRect().bottom + 8;
+  const bottom = document.querySelector('.bottom').getBoundingClientRect().top - 8;
+  const drawer = $('levels');
+  const left = (drawer.style.display === 'none' ? 0 : Math.max(drawer.getBoundingClientRect().right, 0)) + 8;
+  const right = w - 8;
+  const perPixel = Math.max(size.x / Math.max(right - left, 50), size.z / Math.max(bottom - top, 50), 0.001) * 1.1;
+  planControls.half = (perPixel * h) / 2;
+  planControls.target.set(
+    centre.x - ((left + right) / 2 - w / 2) * perPixel,
+    centre.y,
+    centre.z - ((top + bottom) / 2 - h / 2) * perPixel);
+  planControls.height = box.max.y + 5;
+  planCamera.near = 0.05;
+  planCamera.far = size.y + 10;
+  planControls.update();
+}
+
+function fitTurn(box) {
   const size = box.getSize(new THREE.Vector3());
   const centre = box.getCenter(new THREE.Vector3());
   const radius = Math.max(size.length() / 2, 0.5);
@@ -646,7 +788,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || !model) { down = null; return; }
   down = null;
   const p = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
-  ray.setFromCamera(p, camera);
+  ray.setFromCamera(p, view);
   const meshes = blocks.filter((b) => b.object.visible).flatMap((b) => b.bodies.concat(b.letters.filter((m) => m.visible)));
   const hit = ray.intersectObjects(meshes, false)[0];
   select(hit ? blockOf(hit.object) : null);
@@ -661,7 +803,8 @@ if (document.documentElement.requestFullscreen) {
 $('btnOpen').onclick = () => $('file').click();
 $('btnOpenBig').onclick = () => $('file').click();
 $('file').onchange = (e) => openFile(e.target.files[0]);
-$('btnFit').onclick = fit;
+$('btnFit').onclick = () => fit();
+$('btn2d').onclick = () => setFlat(!flat);
 $('btnLetters').onclick = () => setLetters(!lettersOn);
 $('btnPrev').onclick = () => move(-1);
 $('btnNext').onclick = () => move(1);
@@ -714,20 +857,35 @@ if (inApp) {
   if (android && !tried) toBrowser();
 }
 
-// Shade in the corners (ambient occlusion) — only when the model stands still:
-// while it turns the picture is drawn plain and quick, a quarter of a second
-// after it stops it is drawn once with the shading and then left alone. A
-// phone that takes too long for it (over 400 ms) is spared it for the rest of
-// the visit. His 2026-10-09: „сложи нещо като амбиент оклужан … ако не е тежко
-// за 3-4 годишни андроид телефони". ORIGIN unasked — the way and the numbers.
+// Shade in the corners (ambient occlusion), always on — while the model turns
+// too. His 2026-10-09: „сложи нещо като амбиент оклужан … ако не е тежко за 3-4
+// годишни андроид телефони", then „в момента в който спра да мърдам екрана и
+// той зареди линиите стават пикселизирани, нее добре … не е тежка геометрията
+// мисля че може да се направи постоянно да е вклучен".
+// The lines went jagged because the shaded picture was drawn without
+// smoothing of edges and at a lower resolution than the plain one; now it is
+// drawn smoothed (4 samples) and at the screen's own resolution.
+// A phone that cannot keep up — under about 14 pictures a second while the
+// model turns — shades only when the model stands still (a quarter of a
+// second after it stops), for the rest of the visit; one that takes over
+// 400 ms for a single shaded picture is spared the shading altogether.
+// ORIGIN unasked — the guards and their numbers.
 let composer = null;
+let renderPass = null;
+let gtao = null;
 let occlusion = true;
+let shadeWhileMoving = true;
 try {
-  composer = new EffectComposer(renderer);
-  composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  // The shading needs WebGL 2 and pictures in half floats; without them the
+  // picture is drawn plain.
+  if (!renderer.capabilities.isWebGL2 || !renderer.extensions.has('EXT_color_buffer_float')) throw new Error('no float targets');
+  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+  composer = new EffectComposer(renderer, target);
+  composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(window.innerWidth, window.innerHeight);
-  composer.addPass(new RenderPass(scene, camera));
-  const gtao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+  renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+  gtao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
   gtao.blendIntensity = 0.9;
   gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12 });
   composer.addPass(gtao);
@@ -737,28 +895,86 @@ try {
 }
 window.addEventListener('resize', () => { if (composer) composer.setSize(window.innerWidth, window.innerHeight); });
 
+// The shading follows the camera the picture is drawn with; the flat 2D one
+// reads depth in its own way.
+function aim(cam) {
+  if (!composer) return;
+  renderPass.camera = cam;
+  gtao.camera = cam;
+  const perspective = cam.isPerspectiveCamera ? 1 : 0;
+  for (const material of [gtao.gtaoMaterial, gtao.depthRenderMaterial]) {
+    if (material.defines.PERSPECTIVE_CAMERA !== perspective) {
+      material.defines.PERSPECTIVE_CAMERA = perspective;
+      material.needsUpdate = true;
+    }
+  }
+}
+
+// 2D on and off. Each view keeps where it was; the levels, the step and the
+// chosen panel stay as they are.
+function setFlat(on) {
+  changed();
+  flat = on;
+  $('btn2d').classList.toggle('on', on);
+  controls.enabled = !on;
+  planControls.enabled = on;
+  controls.pointers.clear();
+  planControls.pointers.clear();
+  view = on ? planCamera : camera;
+  aim(view);
+}
+
 let version = 0;           // anything on the page that changes the picture
 const lastCamera = new THREE.Matrix4();
+const lastProjection = new THREE.Matrix4();
 let lastVersion = -1;
 let stillSince = performance.now();
 let shaded = false;
+let paceLast = 0;
+let paceSum = 0;
+let paceCount = 0;
 function changed() { version += 1; }
-renderer.setAnimationLoop(() => {
-  controls.update();
-  camera.updateMatrixWorld();
-  const moving = controls.pointers.size > 0 || !lastCamera.equals(camera.matrixWorld) || version !== lastVersion;
-  if (moving) {
-    lastCamera.copy(camera.matrixWorld);
-    lastVersion = version;
-    stillSince = performance.now();
-    shaded = false;
-    renderer.render(scene, camera);
-    return;
-  }
-  if (shaded || !composer || !occlusion || performance.now() - stillSince < 250) return;
+
+function draw(shade) {
+  if (!shade) { renderer.render(scene, view); return; }
   const started = performance.now();
   composer.render();
   if (performance.now() - started > 400) occlusion = false;
+}
+
+// How fast the shaded pictures follow each other while the model moves.
+function pace(shade, now) {
+  if (!shade) { paceLast = 0; return; }
+  // A gap of a second is a pause (the page was in the background), not a
+  // slow picture.
+  if (paceLast && now - paceLast < 1000) { paceSum += now - paceLast; paceCount += 1; }
+  paceLast = now;
+  if (paceCount < 30) return;
+  if (paceSum / paceCount > 70) shadeWhileMoving = false;
+  paceSum = 0;
+  paceCount = 0;
+}
+
+renderer.setAnimationLoop((now) => {
+  const active = flat ? planControls : controls;
+  active.update();
+  view.updateMatrixWorld();
+  const moving = active.pointers.size > 0 || !lastCamera.equals(view.matrixWorld) ||
+    !lastProjection.equals(view.projectionMatrix) || version !== lastVersion;
+  if (moving) {
+    lastCamera.copy(view.matrixWorld);
+    lastProjection.copy(view.projectionMatrix);
+    lastVersion = version;
+    stillSince = now;
+    const shade = !!composer && occlusion && shadeWhileMoving;
+    draw(shade);
+    pace(shade, now);
+    shaded = shade;
+    return;
+  }
+  pace(false, now);
+  if (shaded || !composer || !occlusion || now - stillSince < 250) return;
+  draw(true);
   shaded = true;
 });
 
