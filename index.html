@@ -422,9 +422,9 @@ function stageName(key) {
 
 let model = null;
 let blocks = [];          // { object, name, placement, stage, stageOrder, bodies, letters, colour }
-let stages = [];          // [{ key, order, on }]
+let stages = [];          // [{ key, order }]
 let levels = [];          // the stages with a button, bottom up (the foundation has none)
-let upTo = 0;             // the highest level shown
+let upTo = -1;            // the level being put up now (-1: nothing yet)
 let sequence = [];        // the blocks of the stages that are on, in the order they go up
 let lettersOn = true;
 let selected = null;
@@ -651,23 +651,22 @@ function show(gltf, label) {
 
   const keys = new Map();
   for (const x of blocks) if (!keys.has(x.stage)) keys.set(x.stage, x.stageOrder);
-  stages = [...keys].map(([key, order]) => ({ key, order, on: true })).sort((p, q) => p.order - q.order);
+  stages = [...keys].map(([key, order]) => ({ key, order })).sort((p, q) => p.order - q.order);
   levels = stages.filter((st) => st.key !== 'B');
-  upTo = levels.length - 1;
+  upTo = -1;
   const column = $('levelButtons');
   column.replaceChildren(...levels.map((st, i) => {
     const button = document.createElement('button');
     button.innerHTML = houseIcon(levels, i);
     button.title = stageName(st.key);
     button.setAttribute('aria-label', stageName(st.key));
-    // Pressed again, the level goes too and the one under it stays (his
-    // „като натиснеш още един път първия етаж да се скрива и той" — then only
-    // the foundation is left).
-    button.onclick = () => showUpTo(i === upTo ? i - 1 : i);
+    // Pressed again where its level ends, the level goes too and the one
+    // under it stays (his „като натиснеш още един път първия етаж да се скрива
+    // и той" — then only the foundation is left).
+    button.onclick = () => jumpTo(shown === levelEnd(i) ? i - 1 : i);
     return button;
   }));
   $('levels').style.display = levels.length > 1 ? 'flex' : 'none';
-  markLevels();
 
   $('empty').style.display = 'none';
   setLetters(lettersOn);
@@ -679,23 +678,32 @@ function show(gltf, label) {
   fit(true);
 }
 
-// A level shows itself and everything under it, and hides what is above —
-// storey 1; then storey 1 and the floor; then the second storey on them; the
-// roof shows all. The foundation stands always. His 2026-10-09: „ако цъкнеш
-// едно не скрива едно а скрива всичко останало, ако цъкнеш флор показва 1
-// плус флор ако цъкнеш етаж две - 1+ флор + 2 и така на татък".
-function showUpTo(i) {
-  upTo = i;
-  for (const st of stages) st.on = st.key === 'B' || levels.indexOf(st) <= i;
-  markLevels();
-  restage(i < 0 ? 0 : null);
+// A level button moves the steps to where that level's putting up ends — its
+// panels and everything under it stand, nothing above — and ◀ ▶ go on from
+// there through the whole order (his 2026-10-09: „ако цъкнеш флор показва 1
+// плус флор ако цъкнеш етаж две - 1+ флор + 2", then on 2026-10-10 „направи и
+// бутоните в чекмеджето да местят курсора на съответното място- до където е
+// стигнало реденето и да можеш да продължаваш с него"). The level ends where
+// the next one's phase begins: a late storey-1 panel (the veranda's walls)
+// comes with the phase it goes up in. The foundation stands always.
+function levelEnd(i) {
+  return i < 0 ? 0 : sequence.filter((b) => b.phase <= levels[i].order).length;
+}
+
+function jumpTo(i) {
+  setStep(levelEnd(i));
 }
 
 // The drawer stays where it is; nothing at the bottom moves it any more.
 function placeLevels() {}
 
+// The lit house is the level being put up now — stepping into the next level
+// lights its house (his 2026-10-10: „когато покриеш един етаж това да
+// рефлектира и на бутоните в чекмеджето"). Nothing lit at step 0.
 function markLevels() {
-  [...$('levelButtons').children].forEach((button, i) => button.classList.toggle('on', i === upTo));
+  const phase = shown > 0 ? sequence[shown - 1].phase : null;
+  upTo = phase === null ? -1 : levels.reduce((at, st, k) => (st.order <= phase ? k : at), -1);
+  [...$('levelButtons').children].forEach((button, k) => button.classList.toggle('on', k === upTo));
 }
 
 // Swipe the drawer right to tuck it away, left (or tap the grip) to bring it
@@ -774,17 +782,13 @@ function houseIcon(list, lit) {
 // натискаш бутон напред се добавят всеки следващ панел"; the order without
 // numbers is the assistant's.
 //
-// The steps count how many of them stand: 0 … all. With every level hidden
-// the steps stay, at 0, over the first storey's blocks — „▶" puts them up one
-// by one from the bare foundation (his 2026-10-09: „лентата за скрол и
-// стрелките да не се скриват с първия етаж. просто да стоят на 0 когато е
-// скрит").
+// The steps count how many of them stand: 0 … all, over the whole order of
+// every level (his 2026-10-09: „лентата за скрол и стрелките да не се скриват
+// с първия етаж. просто да стоят на 0 когато е скрит").
 let shown = 0;
 
 function restage(count = null) {
-  const on = new Set(stages.filter((st) => st.on).map((st) => st.key));
-  if (upTo < 0 && levels.length) on.add(levels[0].key);
-  sequence = blocks.filter((b) => on.has(b.stage) && b.stage !== 'B').sort((p, q) =>
+  sequence = blocks.filter((b) => b.stage !== 'B').sort((p, q) =>
     (numbered(p) ? 0 : 1) - (numbered(q) ? 0 : 1) ||
     (p.placement ?? 0) - (q.placement ?? 0) ||
     p.stageOrder - q.stageOrder ||
@@ -879,6 +883,7 @@ function setStep(count, stepped = false) {
   if (selected && !selected.object.visible) select(null);
   for (const b of blocks) look(b);
   halo();
+  markLevels();
   $('stepRange').value = shown;
   if (shown === sequence.length && shown > 0) {
     $('stepWhat').textContent = `Видими: ${sequence.length}. „◀" маха, „▶" добавя по един.`;
