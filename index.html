@@ -802,14 +802,17 @@ const PICKED_GLOW = 0x0b3a99;
 // the floor too (his 2026-10-09: „в две дто когато минеш от първи етаж на
 // редене на под първия да избледнява, когато минеш от под на втори етаж пода
 // да избледнява"). The stage being put up is the last placed block's (at
-// step 0 the first one's). ORIGIN unasked — how pale, the foundation going
-// with storey 1, the letters and lines going with their panel.
+// step 0 the first one's). The foundation is pale in 2D all the time, storey
+// 1 too being put up on it (his „направи и фундамента да бледнее в две дто
+// докато редиш етаж 1"). ORIGIN unasked — how pale, the letters and lines
+// going with their panel.
 const PAPER = new THREE.Color(0xeef1f4);
 const paleEdges = new THREE.LineBasicMaterial({ color: 0x1f2a36, transparent: true, opacity: 0.15 });
 function pale(block) {
-  if (!flat || !sequence.length) return false;
+  if (!flat) return false;
+  if (block.stage === 'B') return true;
+  if (!sequence.length) return false;
   const now = (shown > 0 ? sequence[shown - 1] : sequence[0]).stageOrder;
-  if (block.stage === 'B') return levels.length > 0 && now > levels[0].order;
   return block.stageOrder < now;
 }
 
