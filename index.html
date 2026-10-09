@@ -1285,7 +1285,7 @@ if (inApp) {
 // what is lower and only where there is something. ORIGIN unasked — the
 // width (about 15 cm of blur) and the depth.
 const SHADOW_SPREAD_M = 0.12;
-const SHADOW_DEPTH = 1.8;
+const SHADOW_DEPTH = 3;
 class PlanShadowPass extends Pass {
   constructor() {
     super();
@@ -1330,7 +1330,11 @@ class PlanShadowPass extends Pass {
           vec4 colour = texture2D(tDiffuse, vUv);
           float under = 1.0 - smoothstep(0.25, 0.75, texture2D(tSharp, vUv).r);
           float something = texture2D(tDepth, vUv).x < 0.99999 ? 1.0 : 0.0;
-          float shade = min(depth * texture2D(tSoft, vUv).r * under * something, 0.7);
+          // Darkening that eases towards its deepest instead of stopping at a
+          // ceiling — where two panels' shadows meet in a corner it still
+          // fades, no flat dark patch with an edge (his 2026-10-10: „по
+          // ъглите сянката в 2D да е по-преливаща").
+          float shade = 0.7 * (1.0 - exp(-depth * texture2D(tSoft, vUv).r)) * under * something;
           vec3 rgb = colour.rgb * (1.0 - shade);
           // The outer outlines: black round what stands, faint round the pale.
           vec3 here = texture2D(tIds, vUv).rgb;
@@ -1392,7 +1396,8 @@ class PlanShadowPass extends Pass {
     // when zoomed in (his 2026-10-10: „като зумнеш сянката стои на пиксели").
     const perMetre = this.size[1] / (cam.top - cam.bottom);
     const sigma = Math.max(SHADOW_SPREAD_M * perMetre, 0.5);
-    const scale = THREE.MathUtils.clamp(3 / sigma, 1 / 16, 1);
+    // (Down to 1/64: zoomed far in, 1/16 still left steps of several dots.)
+    const scale = THREE.MathUtils.clamp(3 / sigma, 1 / 64, 1);
     const bw = Math.max(1, Math.round(this.size[0] * scale));
     const bh = Math.max(1, Math.round(this.size[1] * scale));
     for (const t of [this.blurA, this.blurB]) if (t.width !== bw || t.height !== bh) t.setSize(bw, bh);
@@ -1609,7 +1614,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'd83072a91fab';
+const PAGE_VERSION = '397c82697655';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
