@@ -699,8 +699,11 @@ function markLevels() {
 }
 
 // Swipe the drawer right to tuck it away, left (or tap the grip) to bring it
-// back; a swipe is no press of the button it started on. Remembered on this
-// phone.
+// back; a swipe is no press of the button it started on. It starts tucked
+// away, open only where it was left open — each app (Chrome, Facebook,
+// Viber) keeps its own memory, so a page opened from a Facebook link knew
+// nothing of the drawer tucked in Chrome (his 2026-10-10: „ако отворя
+// програмата от линк през фейсбук стартира с отворено чекмедже").
 (() => {
   const drawer = $('levels');
   let from = null;
@@ -709,7 +712,9 @@ function markLevels() {
     drawer.classList.toggle('tucked', on);
     try { localStorage.setItem('mn-levels-tucked', on ? '1' : '0'); } catch (e) { /* no storage */ }
   };
-  try { if (localStorage.getItem('mn-levels-tucked') === '1') drawer.classList.add('tucked'); } catch (e) { /* no storage */ }
+  let open = false;
+  try { open = localStorage.getItem('mn-levels-tucked') === '0'; } catch (e) { /* no storage */ }
+  drawer.classList.toggle('tucked', !open);
   drawer.addEventListener('pointerdown', (e) => { from = e.clientX; swiped = false; });
   drawer.addEventListener('pointermove', (e) => {
     if (from === null) return;
