@@ -741,58 +741,75 @@ function markLevels() {
   $('grip').addEventListener('click', () => tuck(!drawer.classList.contains('tucked')));
 })();
 
-// The little house of a level button — a barnhouse seen from its front: the
-// walls and the gable in one outline, drawn bold round the whole house — the
-// barnhouse's own silhouette — no eaves, no chimney; one band a storey with
-// two tall narrow windows, a thin slab a floor, the gable the roof with a
-// slit of glass up into it; bottom up, green as far as the button reaches,
-// the rest grey (his 2026-10-09 „и ги направи малко по-готини", then on
-// 2026-10-10 „да прилича повече на барнхаус погледнат в предната фасада",
-// „не толкова стръмен покрив и по-широка къщата … страничния контур като
-// типичната за барнхаус обобщаваща форма"). ORIGIN unasked — the proportions
-// (about 35° of roof), the windows, the outline's colour.
+// The little house of a level button — a barnhouse seen from its gable, after
+// the picture he sent on 2026-10-10 (Norges Hus, „Koia"): a wide house, the
+// roof at about 40°, its edge a thick dark band round the gable, the walls'
+// edge thin; glass in the middle of every storey and up into the gable, cut
+// by thin uprights, boards standing at the sides; a thin slab a floor. Bottom
+// up, green as far as the button reaches, the rest grey, the glass lit warm
+// where it is green (his 2026-10-09 „и ги направи малко по-готини", 2026-10-10
+// „да прилича повече на барнхаус погледнат в предната фасада", „не толкова
+// стръмен покрив и по-широка къщата … страничния контур като типичната за
+// барнхаус обобщаваща форма", then the picture). ORIGIN unasked — every
+// measure and colour of it.
 let iconCount = 0;
 function houseIcon(list, lit) {
   const id = `h${iconCount += 1}`;
   const width = 46;
   const left = 5;
   const right = width - 5;
-  const sizes = { storey: 12, slab: 2.5, roof: 12 };
+  const mid = width / 2;
+  const sizes = { storey: 12, slab: 2, roof: 15 };
   const kinds = list.map((st) => (st.key === 'R' ? 'roof' : (st.key === 'F' ? 'slab' : 'storey')));
-  const total = kinds.reduce((sum, kind) => sum + sizes[kind], 0) + 3;
+  const total = kinds.reduce((sum, kind) => sum + sizes[kind], 0) + 4;
   const bottom = total - 1.5;
   let y = bottom;
   let eaves = null;
+  const frame = '#263238';
   const defs = `<defs>
     <linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#059669"/></linearGradient>
-    <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1fb889"/><stop offset="1" stop-color="#065f46"/></linearGradient>
+    <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1fb889"/><stop offset="1" stop-color="#047857"/></linearGradient>
     <linearGradient id="${id}o" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e7eb"/><stop offset="1" stop-color="#c3cad2"/></linearGradient>
   </defs>`;
+  const line = (x1, y1, x2, y2, colour, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${colour}" stroke-width="${w}"/>`;
   const shapes = kinds.map((kind, i) => {
     const h = sizes[kind];
     const top = y - h;
     y = top;
     const on = i <= lit;
-    const glass = on ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.75)';
+    const glass = on ? '#fff1cc' : 'rgba(255,255,255,.8)';
+    const mullion = on ? '#1f3b33' : '#8a96a3';
     if (kind === 'roof') {
       eaves = top + h;
       const fill = on ? `url(#${id}r)` : `url(#${id}o)`;
-      return `<polygon points="${left},${top + h} ${right},${top + h} ${width / 2},${top}" fill="${fill}"/>` +
-        `<rect x="${width / 2 - 1.6}" y="${top + h * 0.4}" width="3.2" height="${h * 0.5}" fill="${glass}"/>`;
+      // The gable's glass: a smaller triangle, cut by uprights.
+      const apex = top + 5;
+      const half = (mid - left) - 7;
+      const edgeAt = (x) => apex + (Math.abs(x - mid) / half) * (eaves - apex);
+      const posts = [mid - half / 2, mid, mid + half / 2]
+        .map((x) => line(x, eaves, x, edgeAt(x), mullion, 0.7)).join('');
+      return `<polygon points="${left},${eaves} ${right},${eaves} ${mid},${top}" fill="${fill}"/>` +
+        `<polygon points="${mid - half},${eaves} ${mid + half},${eaves} ${mid},${apex}" fill="${glass}"/>` + posts;
     }
     if (kind === 'slab') {
       return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${on ? '#065f46' : '#aab3bc'}"/>`;
     }
     const fill = on ? `url(#${id}g)` : `url(#${id}o)`;
-    return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${fill}"/>` +
-      `<rect x="${left + 6}" y="${top + 2.5}" width="4" height="${h - 5}" fill="${glass}"/>` +
-      `<rect x="${right - 10}" y="${top + 2.5}" width="4" height="${h - 5}" fill="${glass}"/>`;
+    const gx = left + 8;
+    const gw = right - left - 16;
+    const board = on ? 'rgba(6,78,59,.35)' : 'rgba(80,90,100,.25)';
+    const boards = [left + 2.5, left + 5, right - 2.5, right - 5].map((x) => line(x, top + 1, x, top + h - 1, board, 0.5)).join('');
+    const posts = [gx + gw / 3, gx + (2 * gw) / 3].map((x) => line(x, top + 1.5, x, top + h - 1, mullion, 0.7)).join('');
+    return `<rect x="${left}" y="${top}" width="${right - left}" height="${h}" fill="${fill}"/>` + boards +
+      `<rect x="${gx}" y="${top + 1.5}" width="${gw}" height="${h - 2.5}" fill="${glass}"/>` + posts;
   });
-  // The silhouette, bold, round all of it.
-  const outline = eaves === null
-    ? `M${left},${bottom} V${y} H${right} V${bottom} Z`
-    : `M${left},${bottom} V${eaves} L${width / 2},${y} L${right},${eaves} V${bottom} Z`;
-  shapes.push(`<path d="${outline}" fill="none" stroke="#334155" stroke-width="1.6" stroke-linejoin="miter"/>`);
+  // The silhouette: the walls' edge thin, the roof's a thick dark band.
+  if (eaves === null) {
+    shapes.push(`<path d="M${left},${bottom} V${y} H${right} V${bottom} Z" fill="none" stroke="${frame}" stroke-width="1.4"/>`);
+  } else {
+    shapes.push(`<path d="M${left},${eaves} V${bottom} H${right} V${eaves}" fill="none" stroke="${frame}" stroke-width="1.4"/>`);
+    shapes.push(`<path d="M${left - 0.6},${eaves + 0.8} L${mid},${y} L${right + 0.6},${eaves + 0.8}" fill="none" stroke="${frame}" stroke-width="3" stroke-linejoin="miter"/>`);
+  }
   // A quarter bigger than in the drawer: the row over the slider has room.
   return `<svg viewBox="0 0 ${width} ${total}" width="${Math.round(width * 1.25)}" height="${Math.round(total * 1.25)}" aria-hidden="true">${defs}${shapes.join('')}</svg>`;
 }
@@ -1339,7 +1356,7 @@ document.addEventListener('pointerup', (e) => {
 // question whether the page should check for a new version by itself).
 // `PAGE_VERSION` is written in at publishing (`tools/publish_viewer.py`); the
 // source here keeps the placeholder and checks nothing.
-const PAGE_VERSION = 'cc05c75a2a64';
+const PAGE_VERSION = '44c42060e3a0';
 (async () => {
   if (PAGE_VERSION.startsWith('__')) return;
   try {
